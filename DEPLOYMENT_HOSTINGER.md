@@ -1,111 +1,90 @@
-# PANDUAN DEPLOYMENT HOSTINGER VIA GIT & GITHUB
-## Sistem Informasi SOP Pemberian Makan Pasien Rawat Inap (SI PANTAI GIZI)
-### Puskesmas Kepulauan Seribu Selatan
-
-Aplikasi ini dibangun menggunakan **Next.js 15 (App Router)**, **TypeScript**, dan **Tailwind CSS**. Aplikasi sudah dikonfigurasi dengan mode produksi `output: 'standalone'` sehingga dapat langsung di-deploy di layanan **Hostinger Cloud Hosting / VPS / cPanel Node.js Application Manager** melalui sinkronisasi Git/GitHub secara seamless.
+# SOLUSI MENGATASI 403 FORBIDDEN & PANDUAN DEPLOY HOSTINGER
+## SI PANTAI GIZI — Puskesmas Kepulauan Seribu Selatan
+### Subdomain: `sipantaigizi.puskesmasseribuselatan.com`
 
 ---
 
-### TAHAP 1: PUSH KODE KE GITHUB REPOSITORY
+## 🚨 PENYEBAB MUNCULNYA "403 Forbidden: Access to this resource on the server is denied!"
 
-1. Di komputer lokal Anda (atau melalui Git terminal), inisialisasi repositori Git jika belum:
+Error **403 Forbidden** pada LiteSpeed Web Server Hostinger terjadi karena 3 hal berikut:
+1. **Belum adanya file startup `server.js`** di root folder aplikasi: Hostinger Node.js Application Manager mewajibkan file startup untuk mengeksekusi server.
+2. **Belum adanya konfigurasi `.htaccess` Reverse Proxy**: LiteSpeed secara default mencari file statis `index.html`/`index.php`. Karena Next.js berjalan di background pada port Node.js (3000), LiteSpeed menolak akses direktori (*Directory Listing Disabled*) sehingga mengeluarkan layar 403 Forbidden.
+3. **Aplikasi Node.js belum di-Build & di-Start di hPanel**: File `.next` belum dibuat (`npm run build`) dan status aplikasi di hPanel masih *Stopped*.
+
+**Semua konfigurasi file (`server.js`, `.htaccess`, `package.json`) kini TELAH KAMI SEDIAKAN dan siap digunakan!**
+
+---
+
+## 🛠️ LANGKAH CEPAT 3 MENIT MENYELESAIKAN 403 FORBIDDEN DI HOSTINGER
+
+### LANGKAH 1: PUSH FILE TERBARU KE GITHUB & PULL DI HOSTINGER
+1. Di komputer lokal Anda, commit dan push pembaruan file ini ke GitHub:
    ```bash
-   git init
    git add .
-   git commit -m "feat: SI PANTAI GIZI siap deploy Hostinger"
+   git commit -m "fix: tambahkan server.js dan .htaccess untuk fix 403 Hostinger"
+   git push origin main
    ```
-2. Buat repository baru di akun GitHub Anda (misalnya: `sipantai-gizi`).
-3. Hubungkan remote repository dan push kode ke branch `main`:
-   ```bash
-   git branch -M main
-   git remote add origin https://github.com/USERNAME_ANDA/sipantai-gizi.git
-   git push -u origin main
-   ```
+2. Buka **Hostinger hPanel**:
+   - Masuk ke menu **Tingkat Lanjut (Advanced)** &rarr; **Git**.
+   - Pada repositori `sipantai-gizi`, klik tombol **Pull** (atau **Deploy Deployment**) agar file `server.js` dan `.htaccess` terbaru masuk ke server Hostinger Anda.
 
 ---
 
-### TAHAP 2: KONFIGURASI NODE.JS DI HOSTINGER (hPanel)
-
-1. **Masuk ke Hostinger hPanel**:
-   - Pilih paket hosting Anda (Cloud Hosting / Business Hosting / VPS).
-   - Masuk ke menu domain tempat aplikasi akan di-deploy (contoh: `gizi.puskesmas-seribuselatan.id` atau domain utama Anda).
-2. **Buka Menu "Node.js"**:
-   - Di sidebar hPanel, cari menu **Tingkat Lanjut (Advanced)** &gt; **Node.js**.
-   - Klik tombol **Buat Aplikasi (Create Application)**.
-3. **Isi Pengaturan Aplikasi Node.js**:
-   - **Versi Node.js**: Pilih `Node.js 20.x` (LTS) atau `Node.js 18.x`.
-   - **Mode Aplikasi**: `Production`.
-   - **Akar Aplikasi (Application Root)**: Masukkan direktori proyek (contoh: `/home/u123456789/domains/domainanda.com/public_html` atau subfolder aplikasi).
-   - **File Mulai Aplikasi (Application Startup File)**:
-     - Jika menggunakan npm script: Biarkan default atau isi `node_modules/next/dist/bin/next` dengan argumen `start`.
-     - Atau isi file launcher `server.js` jika menggunakan output standalone.
-   - **URI Aplikasi (Application URL)**: Pilih domain / subdomain yang aktif.
+### LANGKAH 2: ATUR MENU NODE.JS DI hPANEL HOSTINGER
+1. Di hPanel Hostinger, buka menu **Tingkat Lanjut (Advanced)** &rarr; **Node.js**.
+2. Jika belum membuat aplikasi, klik **Buat Aplikasi (Create Application)**. Jika sudah ada, klik **Kelola / Edit**.
+3. Pastikan kolom diisi sebagai berikut:
+   - **Versi Node.js (Node.js version)**: `20.x` (LTS) atau `18.x`.
+   - **Mode Aplikasi (Application mode)**: `Production`.
+   - **Akar Aplikasi (Application root)**: Arahkan ke folder tempat git ditarik, misalnya:
+     - Jika subdomain: `/home/uXXXXX/domains/puskesmasseribuselatan.com/public_html/sipantaigizi`
+     - Atau path folder subdomain Anda yang sesuai di File Manager.
+   - **File Mulai Aplikasi (Application startup file)**: Masukkan **`server.js`** *(Wajib diisi `server.js`)*.
+   - **URI Aplikasi (Application URL)**: Pilih `sipantaigizi.puskesmasseribuselatan.com`.
 4. Klik **Simpan (Save)**.
 
 ---
 
-### TAHAP 3: SINKRONISASI GIT DI HOSTINGER (Git Deployment)
-
-1. Di hPanel Hostinger, buka menu **Tingkat Lanjut (Advanced)** &gt; **Git**.
-2. Masukkan URL repository GitHub Anda:
-   - `Repository URL`: `https://github.com/USERNAME_ANDA/sipantai-gizi.git`
-   - `Branch`: `main`
-   - `Install Path`: Direktori aplikasi yang sama dengan Application Root di atas.
-3. Klik **Deploy / Buat**. Hostinger akan melakukan `git clone` otomatis ke server Anda.
-4. **Auto-Deployment via Webhook (Opsional tapi Sangat Direkomendasikan)**:
-   - Salin **Webhook URL** yang disediakan oleh Hostinger.
-   - Buka repository Anda di GitHub &gt; **Settings** &gt; **Webhooks** &gt; **Add webhook**.
-   - Tempel Webhook URL tersebut.
-   - Sekarang, setiap kali Anda melakukan `git push` ke GitHub, Hostinger akan otomatis menarik update terbaru!
-
----
-
-### TAHAP 4: BUILD DAN JALANKAN APLIKASI DI HOSTINGER
-
-1. Masuk ke terminal SSH Hostinger (atau melalui hPanel Terminal / Node.js command runner):
+### LANGKAH 3: JALANKAN BUILD VIA SSH / TERMINAL hPANEL
+1. Buka menu **Tingkat Lanjut** &rarr; **SSH / Terminal** di Hostinger (atau klik tombol **NPM Install & Run script** di panel Node.js):
+2. Masuk ke folder aplikasi Anda:
    ```bash
-   cd /path/ke/aplikasi/anda
+   cd domains/puskesmasseribuselatan.com/public_html/sipantaigizi
    ```
-2. Pasang dependencies:
+3. Pasang library dan jalankan build Next.js:
    ```bash
-   npm install --production=false
-   ```
-3. Lakukan build aplikasi Next.js untuk produksi:
-   ```bash
+   npm install
    npm run build
    ```
-4. Jalankan aplikasi:
-   - Di hPanel Node.js, klik tombol **Mulai Aplikasi (Start Application)** atau **Restart**.
-   - Atau melalui npm:
-     ```bash
-     npm run start
-     ```
-5. Buka domain Anda di browser: Aplikasi **SI PANTAI GIZI** langsung aktif dan dapat diakses!
+4. Di menu **Node.js** hPanel, klik tombol hijau **Mulai Aplikasi (Start Application)** atau **Restart**.
+5. Buka kembali browser Anda di:
+   👉 **`https://sipantaigizi.puskesmasseribuselatan.com`**
+   *Aplikasi SI PANTAI GIZI akan langsung terbuka dan aktif tanpa ada lagi pesan 403 Forbidden!*
 
 ---
 
-### TAHAP 5: SETUP DATABASE GOOGLE SHEETS & GLOBAL PERSISTENCE
-
-1. Buka aplikasi web di browser Anda, lalu login sebagai **Administrator** atau **Ahli Gizi**.
-2. Masuk ke menu **Pengaturan & Integrasi GAS**.
-3. Ikuti langkah cepat:
-   - Buka Google Spreadsheet baru di Google Drive Anda.
-   - Buka menu **Ekstensi** &gt; **Apps Script**, salin dan tempel kode **Code.gs** yang tersedia di panel kanan.
-   - Klik **Terapkan (Deploy)** &gt; **Penerapan Baru (New deployment)** &gt; Pilih **Aplikasi Web (Web App)**.
-   - Akses: **Siapa saja (Anyone)** &gt; Klik **Deploy**.
-   - Salin URL Web App dan tempelkan ke kolom URL di aplikasi web.
-4. Klik tombol hijau:
-   **⚡ Setup Database Otomatis di Google Sheets**
-   Sistem akan secara instan membuat 8 sheet tabel data dan header SOP (MealOrders, Patients, Users, Menus, DietTypes, Providers, AuditLogs, AppSettings) secara otomatis tanpa kesalahan.
-5. Klik **Simpan Konfigurasi**. Pengaturan ini otomatis tersimpan secara **global di server** (`global-settings.json`), sehingga seluruh browser dan perangkat petugas yang membuka web tidak perlu memasukkan URL lagi!
+## ⚡ ALTERNATIF: MENGGUNAKAN PM2 (JIKA MENGGUNAKAN VPS HOSTINGER)
+Jika Anda menggunakan paket **VPS Hostinger**:
+```bash
+cd /var/www/sipantaigizi
+npm install
+npm run build
+pm2 start server.js --name "sipantai-gizi"
+pm2 save
+pm2 startup
+```
 
 ---
 
-### TAHAP 6: DOKUMEN BAST & BUKTI PENYERAHAN PASIEN (PDF)
-
-- **Berita Acara Serah Terima (Penyedia &rarr; PJLP)**:
-  Buka menu **Penerimaan Makanan**, klik **Cetak Berita Acara (BAST PDF)** pada riwayat serah terima. Dokumen resmi lengkap dengan kop Puskesmas, data QC suhu, dan tanda tangan digital penyedia & PJLP siap dicetak atau disimpan sebagai PDF.
-- **Bukti Penyerahan ke Pasien (PJLP &rarr; Pasien)**:
-  Buka menu **Distribusi Makanan**, klik **Cetak Bukti Penyerahan (BPM PDF)**. Dokumen resmi lengkap dengan foto sajian makanan aktual dan tanda tangan digital pasien/keluarga siap dicetak atau disimpan sebagai PDF.
-- **Status Pasien Pulang**:
-  Petugas Ahli Gizi / Dokter dapat memulangkan pasien melalui menu **Master Pasien Rawat Inap** dengan tombol **Tandai Pasien Pulang**. Seluruh order makanan tersisa yang belum disajikan otomatis dibatalkan sesuai SOP Gizi Puskesmas.
+## 📋 CHECKLIST FITUR SETELAH WEBSITE AKTIF
+1. **Login Cepat**:
+   - Telah tersedia tombol login instan 1-klik untuk setiap role (Administrator, Ahli Gizi, Dokter/Perawat, Penyedia Makanan, PJLP/Pramusaji).
+2. **Setup Database Google Sheets**:
+   - Masuk sebagai **Administrator** atau **Ahli Gizi** &rarr; buka menu **Pengaturan & Integrasi GAS**.
+   - Masukkan Web App URL dari Apps Script &rarr; klik **⚡ Setup Database Otomatis di Google Sheets** (8 Sheet otomatis terbuat).
+   - Klik **Simpan Konfigurasi** (otomatis tersimpan secara global di server untuk seluruh perangkat & browser).
+3. **Cetak Dokumen PDF**:
+   - Menu **Penerimaan Makanan**: Cetak Berita Acara Serah Terima (BAST PDF) lengkap tanda tangan digital Penyedia & PJLP.
+   - Menu **Distribusi Makanan**: Cetak Bukti Penyerahan ke Pasien (BPM PDF) lengkap foto makanan & tanda tangan pasien.
+4. **Pasien Pulang**:
+   - Di menu **Master Pasien**, klik **Tandai Pasien Pulang** untuk menyelesaikan rawat inap dan membatalkan sisa order belum tersaji secara otomatis.

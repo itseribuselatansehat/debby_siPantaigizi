@@ -1,0 +1,26 @@
+# ====================================================================
+# HOSTINGER LITESPEED & APACHE REVERSE PROXY CONFIGURATION
+# SI PANTAI GIZI - PUSKESMAS KEPULAUAN SERIBU SELATAN
+# Solusi Mengatasi 403 Forbidden pada Subdomain sipantaigizi.puskesmasseribuselatan.com
+# ====================================================================
+
+# Matikan directory browsing untuk keamanan
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Lewatkan file dan folder fisik yang benar-benar ada (misal folder public, assets, robots.txt)
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Teruskan semua rute ke aplikasi Next.js (port 3000 atau port internal Node.js)
+  RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
+</IfModule>
+
+# Header forwarding untuk SSL / HTTPS
+<IfModule mod_headers.c>
+  RequestHeader set X-Forwarded-Proto "https" env=HTTPS
+</IfModule>

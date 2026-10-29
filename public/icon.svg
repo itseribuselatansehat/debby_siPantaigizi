@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="pantaigizi_grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f766e"/>
+      <stop offset="100%" stop-color="#042f2e"/>
+    </linearGradient>
+    <linearGradient id="gold_grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#pantaigizi_grad)"/>
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#2dd4bf" stroke-width="8" opacity="0.4"/>
+  <!-- Hospital Cross with Leaf / Nutrition Motif -->
+  <path d="M226 140 H286 V226 H372 V286 H286 V372 H226 V286 H140 V226 H226 Z" fill="#ffffff" rx="12"/>
+  <!-- Coastal Wave / Leaf accent -->
+  <path d="M160 380 Q 256 320 352 380 Q 256 420 160 380 Z" fill="url(#gold_grad)"/>
+</svg>

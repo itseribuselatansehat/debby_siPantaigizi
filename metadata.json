@@ -1,0 +1,6 @@
+{
+  "name": "SI PANTAI GIZI - Puskesmas Rawat Inap",
+  "description": "Sistem Pemantauan Asupan Nutrisi, Tagihan, dan Distribusi Gizi SOP Rawat Inap Puskesmas dengan Integrasi Google Apps Script & Spreadsheet",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

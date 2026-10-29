@@ -116,6 +116,26 @@ export default function HomePage() {
       case 'audit_logs':
         return <AuditLogModule logs={auditLogs} />;
       case 'settings':
+        if (currentUser.role !== 'ADMIN') {
+          return (
+            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto font-bold text-lg">
+                ✕
+              </div>
+              <h3 className="font-bold text-slate-900 text-base">Akses Khusus Administrator</h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Pengaturan integrasi Google Apps Script (GAS) dan Google Sheets hanya dapat diakses oleh akun dengan peran Administrator.
+              </p>
+              <button
+                type="button"
+                onClick={() => setActiveModule('dashboard')}
+                className="px-4 py-2 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 transition"
+              >
+                Kembali ke Dashboard
+              </button>
+            </div>
+          );
+        }
         return <GasSettingsModule />;
       default:
         return (

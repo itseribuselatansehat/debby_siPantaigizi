@@ -143,7 +143,7 @@ export function Sidebar({
         { id: 'reports', label: 'Laporan Bulanan', icon: FileText, roles: ['ADMIN', 'AHLI_GIZI', 'PENYEDIA'] },
         { id: 'master_menu_diet', label: 'Master Data', icon: BookOpen, roles: ['ADMIN', 'AHLI_GIZI'] },
         { id: 'audit_logs', label: 'Audit Log', icon: History, roles: ['ADMIN', 'AHLI_GIZI'] },
-        { id: 'settings', label: 'Pengaturan & GAS', icon: Settings, roles: ['ADMIN', 'AHLI_GIZI'] },
+        { id: 'settings', label: 'Pengaturan & GAS', icon: Settings, roles: ['ADMIN'] },
       ],
     },
   ];

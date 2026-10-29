@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { DbStore } from '@/lib/db-store';
 import { GOOGLE_APPS_SCRIPT_CODE } from '@/lib/gas-script-template';
 import { formatJakartaDateTime } from '@/lib/date-utils';
+import { uploadPhotoToDrive, TARGET_GOOGLE_DRIVE_FOLDER_ID, TARGET_GOOGLE_DRIVE_FOLDER_URL } from '@/lib/drive-upload';
 import {
   FileSpreadsheet,
   CheckCircle2,
@@ -16,6 +17,9 @@ import {
   RotateCcw,
   Shield,
   Layers,
+  HardDrive,
+  Camera,
+  Globe,
 } from 'lucide-react';
 
 export function GasSettingsModule() {
@@ -24,12 +28,20 @@ export function GasSettingsModule() {
 
   const [gasUrl, setGasUrl] = useState(settings.gasWebAppUrl || '');
   const [spreadsheetId, setSpreadsheetId] = useState(settings.spreadsheetId || '');
+  const [driveFolderId, setDriveFolderId] = useState(settings.googleDriveFolderId || TARGET_GOOGLE_DRIVE_FOLDER_ID);
+
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; details?: any } | null>(null);
+
   const [isSettingUp, setIsSettingUp] = useState(false);
   const [setupResult, setSetupResult] = useState<{ success: boolean; message: string; details?: any } | null>(null);
+
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const [isTestingDrive, setIsTestingDrive] = useState(false);
+  const [driveTestResult, setDriveTestResult] = useState<{ success: boolean; message: string; fileUrl?: string } | null>(null);
+
   const [copiedCode, setCopiedCode] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -38,6 +50,7 @@ export function GasSettingsModule() {
     db.updateSettings({
       gasWebAppUrl: gasUrl.trim(),
       spreadsheetId: spreadsheetId.trim(),
+      googleDriveFolderId: driveFolderId.trim() || TARGET_GOOGLE_DRIVE_FOLDER_ID,
     });
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 4000);
@@ -57,6 +70,7 @@ export function GasSettingsModule() {
       db.updateSettings({
         gasWebAppUrl: gasUrl.trim(),
         spreadsheetId: spreadsheetId.trim(),
+        googleDriveFolderId: driveFolderId.trim() || TARGET_GOOGLE_DRIVE_FOLDER_ID,
       });
 
       const response = await fetch('/api/gas', {
@@ -131,6 +145,61 @@ export function GasSettingsModule() {
     }
   };
 
+  const handleTestDriveUpload = async () => {
+    if (!gasUrl.trim()) {
+      alert('Silakan simpan URL Web App Google Apps Script terlebih dahulu sebelum menguji upload Google Drive.');
+      return;
+    }
+
+    setIsTestingDrive(true);
+    setDriveTestResult(null);
+
+    try {
+      // Create a small base64 test badge image
+      const canvas = document.createElement('canvas');
+      canvas.width = 400;
+      canvas.height = 300;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#0f766e';
+        ctx.fillRect(0, 0, 400, 300);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText('SI PANTAI GIZI TEST FOTO', 40, 120);
+        ctx.font = '14px sans-serif';
+        ctx.fillText('Puskesmas Kepulauan Seribu Selatan', 40, 160);
+        ctx.fillText(new Date().toLocaleString('id-ID'), 40, 190);
+      }
+      const testBase64 = canvas.toDataURL('image/jpeg', 0.85);
+
+      const res = await uploadPhotoToDrive({
+        base64Data: testBase64,
+        fileName: `test_upload_${Date.now()}.jpg`,
+        folderId: driveFolderId.trim() || TARGET_GOOGLE_DRIVE_FOLDER_ID,
+      });
+
+      if (res.success) {
+        setDriveTestResult({
+          success: true,
+          message: `Uji Upload Sukses! Foto berhasil dibuat dan tersimpan di folder Google Drive ${driveFolderId}.`,
+          fileUrl: res.fileUrl,
+        });
+      } else {
+        setDriveTestResult({
+          success: false,
+          message: res.message || 'Gagal mengunggah ke Google Drive. Pastikan izin akses Drive diberikan pada deploy Apps Script.',
+        });
+      }
+    } catch (err: any) {
+      setDriveTestResult({
+        success: false,
+        message: err?.message || 'Terjadi kesalahan saat menguji upload Google Drive.',
+      });
+    } finally {
+      setIsTestingDrive(false);
+    }
+  };
+
   const handleSyncToSheets = async () => {
     if (!gasUrl.trim()) {
       alert('URL Web App Google Apps Script belum dikonfigurasi.');
@@ -190,12 +259,17 @@ export function GasSettingsModule() {
       {/* Header */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-emerald-700" />
-            <span>Pengaturan Integrasi Google Apps Script (GAS) & Google Sheets</span>
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-emerald-700" />
+              <span>Pengaturan Integrasi Google Apps Script (GAS), Google Sheets & Drive</span>
+            </h2>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+              Khusus Administrator
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Gunakan Google Spreadsheet sebagai database persisten cloud realtime untuk seluruh transaksi SOP SI PANTAI GIZI
+            Database utama Spreadsheet dan penyimpanan cloud seluruh foto sajian makanan ke Google Drive tersimpan secara global di semua browser
           </p>
         </div>
 
@@ -209,6 +283,19 @@ export function GasSettingsModule() {
         </button>
       </div>
 
+      {/* Global Persistence Callout */}
+      <div className="bg-gradient-to-r from-teal-50 via-emerald-50 to-blue-50 border border-teal-200 rounded-xl p-4 flex items-start gap-3 text-xs">
+        <Globe className="w-5 h-5 text-teal-700 mt-0.5 shrink-0" />
+        <div className="space-y-1">
+          <p className="font-bold text-slate-900">
+            Penyimpanan Konfigurasi Global Server-Side (Semua Browser & Perangkat Petugas)
+          </p>
+          <p className="text-slate-600 leading-relaxed text-[11px]">
+            Pengaturan URL Google Apps Script dan Folder Google Drive di bawah ini disimpan di file <code>global-settings.json</code> pada server. Seluruh petugas (Dokter, Perawat, Ahli Gizi, Penyedia Makanan, dan Pramusaji) di perangkat manapun akan otomatis terhubung ke Spreadsheet & Google Drive ini tanpa perlu mengisi ulang.
+          </p>
+        </div>
+      </div>
+
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column: Configuration & Sync Actions */}
@@ -216,13 +303,13 @@ export function GasSettingsModule() {
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4 text-xs">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <Layers className="w-4 h-4 text-teal-700" />
-              <span>Konfigurasi Endpoint Google Sheets</span>
+              <span>Konfigurasi Spreadsheet & Google Drive</span>
             </h3>
 
             {saveSuccess && (
               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 font-semibold flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Konfigurasi GAS berhasil disimpan secara global di server & semua browser!</span>
+                <span>Konfigurasi GAS & Google Drive berhasil disimpan secara global di server & semua browser!</span>
               </div>
             )}
 
@@ -256,12 +343,40 @@ export function GasSettingsModule() {
                 />
               </div>
 
-              <div className="flex items-center gap-2 pt-2">
+              {/* Google Drive Folder ID Input & Link */}
+              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold text-blue-950">
+                    ID Folder Google Drive untuk Penyimpanan Foto *
+                  </label>
+                  <a
+                    href={`https://drive.google.com/drive/folders/${driveFolderId.trim() || TARGET_GOOGLE_DRIVE_FOLDER_ID}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 underline"
+                  >
+                    <span>Buka Folder Drive</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <input
+                  type="text"
+                  value={driveFolderId}
+                  onChange={(e) => setDriveFolderId(e.target.value)}
+                  placeholder="1xsrknKxLZVC-YryvoTCbavbUkEn4EwLk"
+                  className="w-full px-3 py-2 border border-blue-300 rounded-lg font-mono text-xs bg-white text-slate-900 focus:ring-1 focus:ring-blue-500"
+                />
+                <p className="text-[11px] text-blue-800 leading-relaxed">
+                  Seluruh foto dokumentasi makanan yang diambil oleh pramusaji/PJLP saat penyajian ke pasien akan otomatis masuk ke folder Google Drive ini.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-2">
                 <button
                   type="submit"
                   className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white font-semibold rounded-lg shadow-sm transition-colors"
                 >
-                  Simpan Konfigurasi
+                  Simpan Konfigurasi Global
                 </button>
 
                 <button
@@ -272,6 +387,17 @@ export function GasSettingsModule() {
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isTesting ? 'animate-spin' : ''}`} />
                   <span>{isTesting ? 'Menguji...' : 'Uji Koneksi GAS'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleTestDriveUpload}
+                  disabled={isTestingDrive || !gasUrl}
+                  className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-900 font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                  title="Kirim sampel foto uji coba ke Google Drive Folder"
+                >
+                  <Camera className={`w-3.5 h-3.5 ${isTestingDrive ? 'animate-spin' : ''}`} />
+                  <span>{isTestingDrive ? 'Menguji Upload...' : 'Uji Upload Drive'}</span>
                 </button>
               </div>
             </form>
@@ -297,6 +423,37 @@ export function GasSettingsModule() {
                   <pre className="p-2 bg-black/5 rounded text-[10px] font-mono overflow-x-auto">
                     {JSON.stringify(testResult.details, null, 2)}
                   </pre>
+                )}
+              </div>
+            )}
+
+            {/* Drive Upload Test Result */}
+            {driveTestResult && (
+              <div
+                className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
+                  driveTestResult.success
+                    ? 'bg-blue-50 border-blue-200 text-blue-950 font-medium'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}
+              >
+                <div className="flex items-center gap-2 font-bold">
+                  {driveTestResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-rose-600" />
+                  )}
+                  <span>{driveTestResult.message}</span>
+                </div>
+                {driveTestResult.fileUrl && (
+                  <a
+                    href={driveTestResult.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:underline"
+                  >
+                    <span>Lihat Sampel Foto di Google Drive</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
                 )}
               </div>
             )}
@@ -395,14 +552,14 @@ export function GasSettingsModule() {
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-3 text-xs">
             <h4 className="font-bold text-slate-900 flex items-center gap-2">
               <HelpCircle className="w-4 h-4 text-teal-700" />
-              <span>Langkah Cepat Setup Google Sheets:</span>
+              <span>Langkah Cepat Setup Google Sheets & Google Drive:</span>
             </h4>
             <ol className="list-decimal list-inside space-y-1.5 text-slate-600 leading-relaxed">
-              <li>Buat Google Spreadsheet baru di Google Drive Anda.</li>
+              <li>Buka Google Spreadsheet baru di Google Drive Anda.</li>
               <li>Buka menu <strong>Ekstensi &gt; Apps Script</strong>.</li>
               <li>Hapus kode bawaan, lalu salin dan tempel skrip di panel kanan.</li>
               <li>
-                Jalankan fungsi <code>setupDatabaseSheets</code> untuk membuat seluruh tabel: MealOrders, Patients, Users, Menus, AuditLogs secara otomatis.
+                Jalankan fungsi <code>setupDatabaseSheets</code> untuk membuat seluruh tabel secara otomatis.
               </li>
               <li>
                 Klik tombol <strong>Terapkan (Deploy) &gt; Penerapan Baru &gt; Aplikasi Web</strong>.
@@ -410,7 +567,10 @@ export function GasSettingsModule() {
               <li>
                 Pilih <em>Jalankan sebagai: Saya</em> dan <em>Siapa saja yang memiliki akses: Siapa saja (Anyone)</em>.
               </li>
-              <li>Salin URL Web App dan tempel ke kolom di atas.</li>
+              <li>
+                Berikan otorisasi izin Spreadsheet & Google Drive saat diminta.
+              </li>
+              <li>Salin URL Web App dan tempel ke kolom di atas, lalu klik <strong>Simpan Konfigurasi Global</strong>.</li>
             </ol>
           </div>
         </div>
@@ -436,7 +596,7 @@ export function GasSettingsModule() {
             </button>
           </div>
 
-          <div className="relative flex-1 bg-slate-900 rounded-xl p-4 text-[11px] font-mono text-slate-200 overflow-y-auto max-h-[560px] leading-relaxed border border-slate-800 select-all">
+          <div className="relative flex-1 bg-slate-900 rounded-xl p-4 text-[11px] font-mono text-slate-200 overflow-y-auto max-h-[580px] leading-relaxed border border-slate-800 select-all">
             <pre>{GOOGLE_APPS_SCRIPT_CODE}</pre>
           </div>
         </div>

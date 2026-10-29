@@ -1,5 +1,6 @@
 // Google Apps Script (GAS) Code.gs generator & template
-// User can deploy this as a Web App to use Google Sheets as their primary cloud database!
+// User can deploy this as a Web App to use Google Sheets as their primary cloud database
+// and Google Drive folder 1xsrknKxLZVC-YryvoTCbavbUkEn4EwLk for permanent photo storage!
 
 export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * ============================================================================
@@ -16,13 +17,16 @@ export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * 5. Klik tombol "Deploy" (Terapkan) di kanan atas > "New deployment" (Penerapan baru).
  * 6. Pilih tipe: "Web app" (Aplikasi web).
  * 7. Isi konfigurasi:
- *    - Description: "SI PANTAI GIZI API v1.0"
+ *    - Description: "SI PANTAI GIZI API & Drive v2.0"
  *    - Execute as: "Me" (Saya - email akun Google Anda)
  *    - Who has access: "Anyone" (Siapa saja)
- * 8. Klik Deploy, berikan otorisasi izin Google Spreadsheet jika diminta.
+ * 8. Klik Deploy, berikan otorisasi izin Google Spreadsheet & Google Drive jika diminta.
  * 9. Salin "Web app URL" (akhiran /exec) dan tempel ke menu "Pengaturan & Integrasi GAS" di aplikasi web SI PANTAI GIZI.
  * 10. Klik tombol "Setup Database Otomatis" di aplikasi web untuk membuat seluruh sheet & header otomatis!
+ * 11. Folder Google Drive foto otomatis diarahkan ke: 1xsrknKxLZVC-YryvoTCbavbUkEn4EwLk
  */
+
+const DEFAULT_DRIVE_FOLDER_ID = '1xsrknKxLZVC-YryvoTCbavbUkEn4EwLk';
 
 const SHEET_NAMES = {
   ORDERS: 'MealOrders',
@@ -48,7 +52,7 @@ function setupDatabaseSheets() {
       'texture', 'menuName', 'portionCount', 'pricePerPortion', 'totalEstimatedPrice',
       'status', 'orderedByName', 'orderedByRole', 'reviewedByName', 'reviewedAt',
       'providerName', 'providerAcceptedAt', 'shippedAt', 'receivedAt', 'checklistPassed',
-      'deliveredToPatientAt', 'consumptionCategory', 'consumptionPercentage', 'leftoverPercentage',
+      'deliveredToPatientAt', 'servedMealPhotoUrl', 'consumptionCategory', 'consumptionPercentage', 'leftoverPercentage',
       'billedPortionCount', 'finalBilledAmount', 'billingStatus', 'createdAt', 'updatedAt'
     ],
     [SHEET_NAMES.PATIENTS]: [
@@ -114,11 +118,21 @@ function doGet(e) {
     }
 
     if (action === 'ping') {
+      let driveFolderStatus = 'UNKNOWN';
+      try {
+        const folder = DriveApp.getFolderById(DEFAULT_DRIVE_FOLDER_ID);
+        driveFolderStatus = 'CONNECTED (' + folder.getName() + ')';
+      } catch (err) {
+        driveFolderStatus = 'FOLDER_NOT_ACCESSIBLE: ' + err.toString();
+      }
+
       return createJsonResponse({
         status: 'SUCCESS',
-        message: 'Koneksi ke Google Sheets SI PANTAI GIZI Aktif',
+        message: 'Koneksi ke Google Sheets & Drive SI PANTAI GIZI Aktif',
         spreadsheetName: ss.getName(),
         spreadsheetId: ss.getId(),
+        googleDriveFolderId: DEFAULT_DRIVE_FOLDER_ID,
+        driveFolderStatus: driveFolderStatus,
         timeJakarta: Utilities.formatDate(new Date(), 'Asia/Jakarta', 'dd-MM-yyyy HH:mm:ss') + ' WIB'
       });
     }
@@ -139,7 +153,7 @@ function doGet(e) {
 }
 
 /**
- * Handle POST Requests (Sinkronisasi Order, Transaksi, Audit Log & 1-Click Setup)
+ * Handle POST Requests (Sinkronisasi Order, Transaksi, Audit Log, Upload Foto Drive & 1-Click Setup)
  */
 function doPost(e) {
   try {
@@ -150,6 +164,61 @@ function doPost(e) {
     if (action === 'setupDatabase') {
       const setupRes = setupDatabaseSheets();
       return createJsonResponse(setupRes);
+    }
+
+    // =========================================================================
+    // SIMPAN FOTO KE GOOGLE DRIVE FOLDER (1xsrknKxLZVC-YryvoTCbavbUkEn4EwLk)
+    // =========================================================================
+    if (action === 'uploadPhoto' || action === 'uploadFile') {
+      const folderId = postData.folderId || (postData.payload && postData.payload.folderId) || DEFAULT_DRIVE_FOLDER_ID;
+      const base64Data = postData.base64Data || (postData.payload && postData.payload.base64Data);
+      const fileName = postData.fileName || (postData.payload && postData.payload.fileName) || ('gizi_' + Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyyMMdd_HHmmss') + '.jpg');
+      const mimeType = postData.mimeType || (postData.payload && postData.payload.mimeType) || 'image/jpeg';
+
+      if (!base64Data) {
+        return createJsonResponse({ status: 'ERROR', message: 'Data foto (base64) kosong.' });
+      }
+
+      let folder;
+      try {
+        folder = DriveApp.getFolderById(folderId);
+      } catch (err) {
+        return createJsonResponse({
+          status: 'ERROR',
+          message: 'Folder Google Drive (' + folderId + ') tidak dapat diakses. Pastikan folder sudah dibagikan atau akun Apps Script memiliki izin.'
+        });
+      }
+
+      // Bersihkan header data URL (contoh: data:image/jpeg;base64,...)
+      let cleanBase64 = base64Data;
+      if (cleanBase64.indexOf(',') > -1) {
+        cleanBase64 = cleanBase64.split(',')[1];
+      }
+
+      const decoded = Utilities.base64Decode(cleanBase64);
+      const blob = Utilities.newBlob(decoded, mimeType, fileName);
+      const file = folder.createFile(blob);
+
+      try {
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (shareErr) {
+        // Abaikan jika domain membatasi izin sharing publik
+      }
+
+      const fileId = file.getId();
+      const webViewLink = 'https://drive.google.com/file/d/' + fileId + '/view?usp=sharing';
+      const directThumbnail = 'https://lh3.googleusercontent.com/d/' + fileId;
+
+      return createJsonResponse({
+        status: 'SUCCESS',
+        message: 'Foto berhasil disimpan di Google Drive folder ' + folderId,
+        fileId: fileId,
+        fileUrl: webViewLink,
+        directLink: directThumbnail,
+        fileName: fileName,
+        folderId: folderId,
+        folderUrl: 'https://drive.google.com/drive/folders/' + folderId
+      });
     }
 
     if (action === 'syncAll') {
@@ -171,7 +240,7 @@ function doPost(e) {
     }
 
     if (action === 'saveOrder') {
-      const order = postData.order;
+      const order = postData.order || (postData.payload && postData.payload.order);
       if (!order || !order.id) {
         return createJsonResponse({ status: 'ERROR', message: 'Data order tidak lengkap' });
       }
@@ -180,7 +249,7 @@ function doPost(e) {
     }
 
     if (action === 'logAudit') {
-      const log = postData.log;
+      const log = postData.log || (postData.payload && postData.payload.log);
       if (log) {
         appendAuditLogs(ss, [log]);
       }
@@ -243,6 +312,7 @@ function upsertOrders(ss, orders) {
       order.receivedAt || '',
       order.checklistPassed ? 'YA' : 'TIDAK',
       order.deliveredToPatientAt || '',
+      order.servedMealPhotoUrl || '',
       order.leftoverAssessment ? order.leftoverAssessment.consumptionCategory : '',
       order.leftoverAssessment ? order.leftoverAssessment.consumptionPercentage : '',
       order.leftoverAssessment ? order.leftoverAssessment.leftoverPercentage : '',

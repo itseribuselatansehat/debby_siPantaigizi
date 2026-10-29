@@ -222,22 +222,24 @@ export function Navbar({
 
           {/* PWA Install Button */}
           <PWAInstallButton />
-          {/* Google Sheets / GAS connection button */}
-          <button
-            type="button"
-            onClick={onOpenGasModal}
-            className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-              settings.gasWebAppUrl
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-                : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
-            }`}
-            title="Integrasi Google Apps Script & Google Sheets"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-            <span className="whitespace-nowrap">
-              {settings.gasWebAppUrl ? 'Terkoneksi Sheets' : 'Koneksikan GAS'}
-            </span>
-          </button>
+          {/* Google Sheets / GAS connection button - HANYA TAMPIL UNTUK ADMIN SESUAI PERMINTAAN */}
+          {currentUser.role === 'ADMIN' && (
+            <button
+              type="button"
+              onClick={onOpenGasModal}
+              className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                settings.gasWebAppUrl
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                  : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+              }`}
+              title="Integrasi Google Apps Script & Google Sheets (Khusus Administrator)"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+              <span className="whitespace-nowrap">
+                {settings.gasWebAppUrl ? 'Terkoneksi Sheets' : 'Koneksikan GAS'}
+              </span>
+            </button>
+          )}
 
           {/* Pending notification bell */}
           <button

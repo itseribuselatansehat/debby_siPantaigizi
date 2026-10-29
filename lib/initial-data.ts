@@ -18,6 +18,7 @@ export const INITIAL_APP_SETTINGS: AppSettings = {
   providerPhone: '6281809123456',
   gasWebAppUrl: '',
   spreadsheetId: '',
+  googleDriveFolderId: '1xsrknKxLZVC-YryvoTCbavbUkEn4EwLk',
   autoSyncGas: false,
   minFoodTempServeCelsius: 60,
   maxFoodTempServeCelsius: 75,

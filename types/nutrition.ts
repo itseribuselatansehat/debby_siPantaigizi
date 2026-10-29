@@ -249,6 +249,7 @@ export interface AppSettings {
   providerPhone: string; // Nomor WA Penyedia Katering
   gasWebAppUrl: string;
   spreadsheetId: string;
+  googleDriveFolderId?: string; // ID Google Drive Folder untuk penyimpanan seluruh foto dokumentasi
   autoSyncGas: boolean;
   lastGasSyncAt?: string;
   defaultSchedules: { id: MealSchedule; label: string; price: number; deliveryTime: string }[];

@@ -13,6 +13,7 @@ import {
   FileCheck,
   Filter,
 } from 'lucide-react';
+import { PhotoCapture } from '@/components/common/PhotoCapture';
 
 interface LeftoversMonitoringModuleProps {
   orders: MealOrder[];
@@ -52,6 +53,7 @@ export function LeftoversMonitoringModule({ orders, onOrderUpdated }: LeftoversM
   const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
   const [otherReason, setOtherReason] = useState('');
   const [clinicalFollowup, setClinicalFollowup] = useState('');
+  const [leftoverPhotoUrl, setLeftoverPhotoUrl] = useState('');
 
   // Orders eligible for leftovers assessment (already served to patient)
   const pendingAssessmentOrders = orders.filter((o) => o.status === 'DELIVERED_TO_PATIENT');
@@ -64,6 +66,7 @@ export function LeftoversMonitoringModule({ orders, onOrderUpdated }: LeftoversM
     setSelectedCategory('HABIS_100');
     setSelectedReasons([]);
     setOtherReason('');
+    setLeftoverPhotoUrl('');
     setClinicalFollowup('Toleransi asupan baik.');
   };
 
@@ -87,6 +90,7 @@ export function LeftoversMonitoringModule({ orders, onOrderUpdated }: LeftoversM
       consumptionCategory: selectedCategory,
       reasons: selectedReasons,
       otherReasonNotes: otherReason.trim(),
+      leftoverPhotoUrl: leftoverPhotoUrl || undefined,
       clinicalFollowupRecommendation: clinicalFollowup.trim(),
     });
 
@@ -339,6 +343,18 @@ export function LeftoversMonitoringModule({ orders, onOrderUpdated }: LeftoversM
                     onChange={(e) => setOtherReason(e.target.value)}
                     placeholder="Alasan spesifik lainnya..."
                     className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded text-xs mt-2"
+                  />
+                </div>
+              )}
+
+              {/* Foto Dokumentasi Sisa Piring (Google Drive) */}
+              {selectedCategory !== 'HABIS_100' && selectedCategory !== 'TIDAK_DAPAT_DINILAI' && (
+                <div className="space-y-1">
+                  <PhotoCapture
+                    label="Foto Dokumentasi Sisa Piring (Opsional)"
+                    sublabel="Otomatis diunggah & disimpan ke Google Drive folder 1xsrknKxLZVC-YryvoTCbavbUkEn4EwLk"
+                    currentPhotoUrl={leftoverPhotoUrl}
+                    onPhotoSelected={(url) => setLeftoverPhotoUrl(url)}
                   />
                 </div>
               )}

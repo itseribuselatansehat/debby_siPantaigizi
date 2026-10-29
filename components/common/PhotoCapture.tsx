@@ -1,8 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Camera, Upload, Trash2, Eye } from 'lucide-react';
+import { Camera, Upload, Trash2, ExternalLink, HardDrive, CheckCircle2, Loader2 } from 'lucide-react';
 import { formatJakartaDateTime } from '@/lib/date-utils';
+import {
+  uploadPhotoToDrive,
+  TARGET_GOOGLE_DRIVE_FOLDER_ID,
+  TARGET_GOOGLE_DRIVE_FOLDER_URL,
+} from '@/lib/drive-upload';
 
 interface PhotoCaptureProps {
   label: string;
@@ -37,23 +42,70 @@ export function PhotoCapture({
   const [photoUrl, setPhotoUrl] = useState<string>(currentPhotoUrl || '');
   const [capturedAt, setCapturedAt] = useState<string>(currentPhotoUrl ? new Date().toISOString() : '');
   const [showPresets, setShowPresets] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [driveUploadStatus, setDriveUploadStatus] = useState<{
+    success: boolean;
+    fileUrl?: string;
+    message?: string;
+  } | null>(
+    currentPhotoUrl?.includes('drive.google.com')
+      ? { success: true, fileUrl: currentPhotoUrl, message: 'Foto tersimpan di Google Drive' }
+      : null
+  );
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 8 * 1024 * 1024) {
-      alert('Ukuran file foto maksimal 8 MB.');
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Ukuran file foto maksimal 10 MB.');
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const result = event.target?.result as string;
       setPhotoUrl(result);
       const now = new Date().toISOString();
       setCapturedAt(now);
-      onPhotoSelected(result);
+
+      // Otomatis kirim dan simpan ke Google Drive Folder: 1xsrknKxLZVC-YryvoTCbavbUkEn4EwLk
+      setIsUploading(true);
+      setDriveUploadStatus(null);
+
+      try {
+        const driveRes = await uploadPhotoToDrive({
+          base64Data: result,
+          fileName: file.name || `foto_sajian_${Date.now()}.jpg`,
+          mimeType: file.type || 'image/jpeg',
+          folderId: TARGET_GOOGLE_DRIVE_FOLDER_ID,
+        });
+
+        if (driveRes.success && driveRes.fileUrl) {
+          setDriveUploadStatus({
+            success: true,
+            fileUrl: driveRes.fileUrl,
+            message: `Foto berhasil disimpan ke Google Drive (Folder: ${TARGET_GOOGLE_DRIVE_FOLDER_ID})`,
+          });
+          // Gunakan tautan Google Drive sebagai URL permanen
+          onPhotoSelected(driveRes.fileUrl);
+        } else {
+          // Fallback ke data URL lokal jika GAS belum dikonfigurasi admin
+          setDriveUploadStatus({
+            success: false,
+            message: driveRes.message || 'Foto tersimpan lokal (konfigurasi GAS di akun Admin untuk sinkronisasi Google Drive).',
+          });
+          onPhotoSelected(result);
+        }
+      } catch (err: any) {
+        setDriveUploadStatus({
+          success: false,
+          message: err?.message || 'Gagal terhubung ke Google Drive API. Foto tersimpan lokal.',
+        });
+        onPhotoSelected(result);
+      } finally {
+        setIsUploading(false);
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -62,6 +114,11 @@ export function PhotoCapture({
     setPhotoUrl(url);
     const now = new Date().toISOString();
     setCapturedAt(now);
+    setDriveUploadStatus({
+      success: true,
+      fileUrl: url,
+      message: 'Foto sampel demo digunakan',
+    });
     onPhotoSelected(url);
     setShowPresets(false);
   };
@@ -69,11 +126,12 @@ export function PhotoCapture({
   const handleRemove = () => {
     setPhotoUrl('');
     setCapturedAt('');
+    setDriveUploadStatus(null);
     onPhotoSelected('');
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3">
+    <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3 text-xs">
       <div className="flex items-center justify-between">
         <div>
           <label className="block text-xs font-semibold text-slate-900">
@@ -88,6 +146,25 @@ export function PhotoCapture({
         >
           {showPresets ? 'Tutup Preset' : 'Gunakan Foto Demo'}
         </button>
+      </div>
+
+      {/* Google Drive Target Folder Badge */}
+      <div className="flex items-center justify-between bg-blue-50/70 border border-blue-200/80 rounded-lg px-2.5 py-1.5 text-[11px] text-blue-900">
+        <div className="flex items-center gap-1.5 truncate">
+          <HardDrive className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+          <span className="truncate">
+            Target Drive Folder: <strong className="font-mono">{TARGET_GOOGLE_DRIVE_FOLDER_ID}</strong>
+          </span>
+        </div>
+        <a
+          href={TARGET_GOOGLE_DRIVE_FOLDER_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-900 hover:underline shrink-0 ml-2"
+        >
+          <span>Buka Drive</span>
+          <ExternalLink className="w-3 h-3" />
+        </a>
       </div>
 
       {showPresets && (
@@ -109,6 +186,45 @@ export function PhotoCapture({
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Uploading Progress */}
+      {isUploading && (
+        <div className="p-3 bg-teal-50 border border-teal-200 rounded-lg flex items-center gap-2 text-teal-800 text-xs font-semibold animate-pulse">
+          <Loader2 className="w-4 h-4 animate-spin text-teal-700 shrink-0" />
+          <span>Mengunggah dan menyimpan foto ke Google Drive (Folder: {TARGET_GOOGLE_DRIVE_FOLDER_ID})...</span>
+        </div>
+      )}
+
+      {/* Drive Upload Status Notice */}
+      {driveUploadStatus && !isUploading && (
+        <div
+          className={`p-2.5 rounded-lg border text-[11px] flex items-center justify-between gap-2 ${
+            driveUploadStatus.success
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-900 font-medium'
+              : 'bg-amber-50 border-amber-200 text-amber-900'
+          }`}
+        >
+          <div className="flex items-center gap-1.5">
+            {driveUploadStatus.success ? (
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            ) : (
+              <HardDrive className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            )}
+            <span>{driveUploadStatus.message}</span>
+          </div>
+          {driveUploadStatus.fileUrl && driveUploadStatus.fileUrl.startsWith('http') && (
+            <a
+              href={driveUploadStatus.fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-bold text-teal-800 hover:underline shrink-0 inline-flex items-center gap-0.5"
+            >
+              <span>Lihat Foto</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
         </div>
       )}
 
@@ -139,7 +255,9 @@ export function PhotoCapture({
             <Camera className="w-5 h-5" />
           </div>
           <p className="text-xs font-medium text-slate-700 mb-1">Ambil Foto dengan Kamera atau Unggah Berkas</p>
-          <p className="text-[11px] text-slate-400 mb-3">Format JPG, PNG (Maksimal 8 MB)</p>
+          <p className="text-[11px] text-slate-400 mb-3">
+            Otomatis diunggah & disimpan ke Google Drive (Format JPG, PNG maks 10 MB)
+          </p>
           <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-medium rounded-lg cursor-pointer shadow-sm transition-colors">
             <Upload className="w-3.5 h-3.5" />
             <span>Pilih Berkas / Buka Kamera</span>

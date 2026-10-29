@@ -1,0 +1,15 @@
+{
+  "puskesmasName": "Puskesmas Kepulauan Seribu Selatan",
+  "puskesmasRegion": "Wilayah Pesisir & Kepulauan Seribu, DKI Jakarta",
+  "address": "Jl. Dermaga Pelabuhan Utama No. 4, Pulau Tidung, Kepulauan Seribu",
+  "phone": "(021) 645-8901",
+  "nutritionistPhone": "6281287654321",
+  "providerPhone": "6281809123456",
+  "gasWebAppUrl": "",
+  "spreadsheetId": "",
+  "googleDriveFolderId": "1xsrknKxLZVC-YryvoTCbavbUkEn4EwLk",
+  "autoSyncGas": false,
+  "minFoodTempServeCelsius": 60,
+  "maxFoodTempServeCelsius": 75,
+  "updatedAt": "2026-10-29T16:51:00.000Z"
+}

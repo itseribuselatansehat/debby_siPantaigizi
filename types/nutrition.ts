@@ -59,6 +59,9 @@ export interface Patient {
   bed: string; // e.g. "Bed 01"
   admissionDate: string;
   dischargeDate?: string;
+  dischargedAt?: string;
+  dischargedBy?: string;
+  dischargeNotes?: string;
   status: 'ACTIVE' | 'DISCHARGED' | 'TRANSFERRED';
   clinicalDiagnosis: string;
   foodAllergies: string[];
@@ -179,6 +182,7 @@ export interface MealOrder {
   receivedCategory?: MealSchedule;
   qualityChecklist?: QualityCheckItem[];
   checklistPassed?: boolean;
+  measuredFoodTemperature?: string;
   discrepancyAction?: 'DITERIMA_SESUAI' | 'DITERIMA_DENGAN_CATATAN' | 'DITOLAK_MINTA_GANTI' | 'DIBATALKAN';
   discrepancyNotes?: string;
   handoverProviderSignature?: DigitalSignature;
@@ -210,6 +214,7 @@ export interface MealOrder {
   billedPortionCount: number;
   finalBilledAmount: number;
   billingNotes?: string;
+  cancellationReason?: string;
 
   // SOP State
   status: SopStatus;

@@ -59,13 +59,14 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const gasWebAppUrl = searchParams.get('url');
+  const action = searchParams.get('action') || 'ping';
 
   if (!gasWebAppUrl) {
     return NextResponse.json({ status: 'ERROR', message: 'Parameter url diperlukan' }, { status: 400 });
   }
 
   try {
-    const response = await fetch(`${gasWebAppUrl}?action=ping`, {
+    const response = await fetch(`${gasWebAppUrl}?action=${encodeURIComponent(action)}`, {
       method: 'GET',
       redirect: 'follow',
     });

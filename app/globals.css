@@ -13,6 +13,8 @@
   body {
     background: white !important;
     color: black !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
   .no-print {
     display: none !important;
@@ -22,6 +24,14 @@
   }
   .print-page-break {
     page-break-after: always;
+  }
+  /* Remove backdrop and fixed styling during print */
+  .fixed.inset-0 {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
   }
 }
 

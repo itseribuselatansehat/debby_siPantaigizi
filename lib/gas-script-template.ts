@@ -4,7 +4,7 @@
 export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * ============================================================================
  * SI PANTAI GIZI — GOOGLE APPS SCRIPT WEB APP BACKEND & DATABASE CONNECTOR
- * Puskesmas Kecamatan Kepulauan Seribu Selatan
+ * Puskesmas Kepulauan Seribu Selatan
  * Sistem Pemantauan Asupan Nutrisi, Tagihan, dan Distribusi Gizi SOP Rawat Inap
  * ============================================================================
  * 
@@ -13,15 +13,15 @@ export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * 2. Beri nama Spreadsheet, contoh: "DATABASE_SI_PANTAI_GIZI"
  * 3. Buka menu Extensions (Ekstensi) > Apps Script
  * 4. Hapus semua kode default di editor, lalu PASTE SELURUH KODE INI ke Code.gs
- * 5. Jalankan fungsi "setupDatabaseSheets()" sekali saja untuk membuat semua Sheet & Header otomatis.
- * 6. Klik tombol "Deploy" (Terapkan) di kanan atas > "New deployment" (Penerapan baru).
- * 7. Pilih tipe: "Web app" (Aplikasi web).
- * 8. Isi konfigurasi:
+ * 5. Klik tombol "Deploy" (Terapkan) di kanan atas > "New deployment" (Penerapan baru).
+ * 6. Pilih tipe: "Web app" (Aplikasi web).
+ * 7. Isi konfigurasi:
  *    - Description: "SI PANTAI GIZI API v1.0"
- *    - Execute as: "Me" (Saya - email Anda)
- *    - Who has access: "Anyone" (Siapa saja - agar aplikasi web dapat mengirim data secara aman)
- * 9. Klik Deploy, berikan otorisasi izin Google Spreadsheet jika diminta.
- * 10. Salin "Web app URL" (akhiran /exec) dan tempel ke menu "Pengaturan & Integrasi GAS" di aplikasi web SI PANTAI GIZI.
+ *    - Execute as: "Me" (Saya - email akun Google Anda)
+ *    - Who has access: "Anyone" (Siapa saja)
+ * 8. Klik Deploy, berikan otorisasi izin Google Spreadsheet jika diminta.
+ * 9. Salin "Web app URL" (akhiran /exec) dan tempel ke menu "Pengaturan & Integrasi GAS" di aplikasi web SI PANTAI GIZI.
+ * 10. Klik tombol "Setup Database Otomatis" di aplikasi web untuk membuat seluruh sheet & header otomatis!
  */
 
 const SHEET_NAMES = {
@@ -53,7 +53,8 @@ function setupDatabaseSheets() {
     ],
     [SHEET_NAMES.PATIENTS]: [
       'id', 'mrn', 'name', 'gender', 'birthDate', 'room', 'bed',
-      'admissionDate', 'status', 'clinicalDiagnosis', 'foodAllergies', 'dietaryRestrictions'
+      'admissionDate', 'dischargeDate', 'dischargedAt', 'dischargedBy', 'dischargeNotes',
+      'status', 'clinicalDiagnosis', 'foodAllergies', 'dietaryRestrictions'
     ],
     [SHEET_NAMES.USERS]: [
       'id', 'name', 'nipOrNik', 'role', 'email', 'phoneNumber', 'unitOrWard', 'providerId'
@@ -75,10 +76,12 @@ function setupDatabaseSheets() {
     ]
   };
 
+  const createdSheets = [];
   for (const sheetName in schemas) {
     let sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
       sheet = ss.insertSheet(sheetName);
+      createdSheets.push(sheetName);
     }
     const headers = schemas[sheetName];
     if (sheet.getLastRow() === 0) {
@@ -89,16 +92,26 @@ function setupDatabaseSheets() {
   }
 
   Logger.log('Inisialisasi tabel Google Sheets berhasil!');
-  return { status: 'SUCCESS', message: 'Tabel database SI PANTAI GIZI berhasil disiapkan.' };
+  return {
+    status: 'SUCCESS',
+    message: 'Seluruh tabel database Google Sheets SI PANTAI GIZI berhasil disiapkan.',
+    spreadsheetName: ss.getName(),
+    sheets: Object.keys(schemas)
+  };
 }
 
 /**
- * Handle GET Requests (Healthcheck & Data Fetch)
+ * Handle GET Requests (Healthcheck, Data Fetch & 1-Click Setup)
  */
 function doGet(e) {
   try {
-    const action = e.parameter.action || 'ping';
+    const action = (e && e.parameter && e.parameter.action) || 'ping';
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    if (action === 'setupDatabase') {
+      const setupRes = setupDatabaseSheets();
+      return createJsonResponse(setupRes);
+    }
 
     if (action === 'ping') {
       return createJsonResponse({
@@ -126,13 +139,18 @@ function doGet(e) {
 }
 
 /**
- * Handle POST Requests (Sinkronisasi Order, Transaksi, dan Audit Log)
+ * Handle POST Requests (Sinkronisasi Order, Transaksi, Audit Log & 1-Click Setup)
  */
 function doPost(e) {
   try {
     const postData = JSON.parse(e.postData.contents);
     const action = postData.action;
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    if (action === 'setupDatabase') {
+      const setupRes = setupDatabaseSheets();
+      return createJsonResponse(setupRes);
+    }
 
     if (action === 'syncAll') {
       // Sinkronisasi data menyeluruh dari Web App ke Google Sheets

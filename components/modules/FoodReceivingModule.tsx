@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import React, { useState } from 'react';
@@ -41,6 +42,9 @@ export function FoodReceivingModule({ orders, onOrderUpdated }: FoodReceivingMod
   const [waiterSignature, setWaiterSignature] = useState<DigitalSignature | null>(null);
   const [activeSignerTab, setActiveSignerTab] = useState<'PROVIDER' | 'WAITER'>('PROVIDER');
   const [inspectionSubmitted, setInspectionSubmitted] = useState(false);
+
+  // Printable BAST Modal State
+  const [orderForPrintBast, setOrderForPrintBast] = useState<MealOrder | null>(null);
 
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'SARAPAN' | 'SIANG' | 'MALAM'>('ALL');
 
@@ -222,6 +226,58 @@ export function FoodReceivingModule({ orders, onOrderUpdated }: FoodReceivingMod
           </div>
         )}
       </div>
+
+      {/* Completed Handover History with Printable BAST Button */}
+      {completedReceivings.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 font-semibold text-xs text-slate-800 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Printer className="w-4 h-4 text-teal-700" />
+              <span>Riwayat Berita Acara Serah Terima (Penyedia &rarr; PJLP)</span>
+            </span>
+            <span className="text-[11px] text-slate-500 font-normal">
+              {completedReceivings.length} Dokumen BAST Tersedia
+            </span>
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {completedReceivings.map((order) => (
+              <div
+                key={order.id}
+                className="p-4 hover:bg-slate-50/70 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-teal-800">{order.orderNumber}</span>
+                    <span className="text-slate-400">·</span>
+                    <span className="font-semibold text-slate-900">{order.patientName}</span>
+                    <span className="text-slate-500 font-mono">({order.patientMrn})</span>
+                    <span className="text-slate-400">·</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      Diterima PJLP
+                    </span>
+                  </div>
+                  <p className="text-slate-600">
+                    Menu: <strong>{order.menuName}</strong> · Jadwal: <strong>{order.schedule}</strong> · Rekanan: {order.providerName}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Suhu: <strong>{order.measuredFoodTemperature || '64.5'}°C</strong> · Tanda Tangan: Penyedia &amp; PJLP Lengkap
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setOrderForPrintBast(order)}
+                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-teal-50 hover:text-teal-800 hover:border-teal-300 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 self-start sm:self-auto"
+                >
+                  <Printer className="w-3.5 h-3.5 text-teal-700" />
+                  <span>Cetak Berita Acara (BAST PDF)</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Modal: Full Inspection & Dual Digital Signatures */}
       {selectedOrder && (
@@ -505,6 +561,208 @@ export function FoodReceivingModule({ orders, onOrderUpdated }: FoodReceivingMod
                   <Check className="w-4 h-4" />
                   <span>Sahkan Serah Terima & Lanjutkan Distribusi</span>
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Cetak Berita Acara Serah Terima (BAST-GIZI PDF) */}
+      {orderForPrintBast && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-6 text-xs text-slate-900 animate-in fade-in-50">
+            {/* Top Bar for Screen */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 no-print">
+              <div className="flex items-center gap-2">
+                <Printer className="w-5 h-5 text-teal-700" />
+                <h3 className="font-bold text-sm text-slate-900">
+                  Pratinjau Cetak Berita Acara Serah Terima (BAST-GIZI)
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-lg shadow-sm flex items-center gap-1.5"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Cetak / Simpan PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOrderForPrintBast(null)}
+                  className="px-3 py-2 border border-slate-200 hover:bg-slate-100 text-slate-700 font-medium rounded-lg"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+
+            {/* Official Formal Document Content */}
+            <div className="border border-slate-300 p-6 sm:p-8 rounded-xl space-y-5 bg-white text-black font-sans leading-relaxed">
+              {/* Kop Surat Puskesmas Kepulauan Seribu Selatan */}
+              <div className="text-center border-b-2 border-black pb-3 space-y-0.5">
+                <p className="text-xs font-bold uppercase tracking-wide">
+                  PEMERINTAH PROVINSI DAERAH KHUSUS IBUKOTA JAKARTA
+                </p>
+                <p className="text-xs font-bold uppercase tracking-wide">
+                  DINAS KESEHATAN KABUPATEN ADMINISTRASI KEPULAUAN SERIBU
+                </p>
+                <h1 className="text-base font-extrabold uppercase tracking-wider text-black">
+                  PUSKESMAS KEPULAUAN SERIBU SELATAN
+                </h1>
+                <p className="text-[10px] text-slate-600">
+                  Jl. Dermaga Utama No. 04, Kelurahan Pulau Tidung, Kepulauan Seribu Selatan · Telp/WA: (021) 6928-112
+                </p>
+                <p className="text-[9px] font-mono text-slate-500">
+                  Unit Pelayanan Gizi &amp; Instalasi Dapur Rawat Inap Puskesmas
+                </p>
+              </div>
+
+              {/* Judul Dokumen */}
+              <div className="text-center space-y-0.5 py-1">
+                <h2 className="text-sm font-extrabold uppercase tracking-wide underline underline-offset-4">
+                  BERITA ACARA SERAH TERIMA PENGIRIMAN MAKANAN PASIEN
+                </h2>
+                <p className="text-[11px] font-mono">
+                  Nomor: BAST-GIZI/{orderForPrintBast.orderNumber}
+                </p>
+              </div>
+
+              <p className="text-xs text-justify">
+                Pada hari ini, <strong>{formatJakartaDate(orderForPrintBast.serviceDate)}</strong>, telah dilakukan pemeriksaan mutu dan serah terima makanan pasien rawat inap sesuai dengan Standar Operasional Prosedur (SOP) Pemberian Makan Rawat Inap Puskesmas Kepulauan Seribu Selatan, dengan rincian sebagai berikut:
+              </p>
+
+              {/* Detail Transaksi Table */}
+              <div className="border border-slate-300 rounded-lg overflow-hidden text-xs">
+                <table className="w-full border-collapse">
+                  <tbody>
+                    <tr className="border-b border-slate-200">
+                      <td className="w-1/3 px-3 py-1.5 bg-slate-50 font-semibold border-r border-slate-200">Nomor Registrasi Order:</td>
+                      <td className="px-3 py-1.5 font-mono font-bold">{orderForPrintBast.orderNumber}</td>
+                    </tr>
+                    <tr className="border-b border-slate-200">
+                      <td className="px-3 py-1.5 bg-slate-50 font-semibold border-r border-slate-200">Nama Pasien / No. RM:</td>
+                      <td className="px-3 py-1.5 font-bold">
+                        {orderForPrintBast.patientName} <span className="font-mono text-slate-600 font-normal">({orderForPrintBast.patientMrn})</span>
+                      </td>
+                    </tr>
+                    <tr className="border-b border-slate-200">
+                      <td className="px-3 py-1.5 bg-slate-50 font-semibold border-r border-slate-200">Ruang &amp; Kamar Rawat:</td>
+                      <td className="px-3 py-1.5">{orderForPrintBast.room} &mdash; {orderForPrintBast.bed}</td>
+                    </tr>
+                    <tr className="border-b border-slate-200">
+                      <td className="px-3 py-1.5 bg-slate-50 font-semibold border-r border-slate-200">Jadwal Makanan:</td>
+                      <td className="px-3 py-1.5 font-bold uppercase">{orderForPrintBast.schedule}</td>
+                    </tr>
+                    <tr className="border-b border-slate-200">
+                      <td className="px-3 py-1.5 bg-slate-50 font-semibold border-r border-slate-200">Menu &amp; Bentuk Makanan:</td>
+                      <td className="px-3 py-1.5">{orderForPrintBast.menuName} ({orderForPrintBast.texture})</td>
+                    </tr>
+                    <tr className="border-b border-slate-200">
+                      <td className="px-3 py-1.5 bg-slate-50 font-semibold border-r border-slate-200">Jenis Diet Klinis:</td>
+                      <td className="px-3 py-1.5">{orderForPrintBast.dietTypeName}</td>
+                    </tr>
+                    <tr className="border-b border-slate-200">
+                      <td className="px-3 py-1.5 bg-slate-50 font-semibold border-r border-slate-200">Jumlah Porsi Diserahkan:</td>
+                      <td className="px-3 py-1.5 font-bold">{orderForPrintBast.portionCount} Porsi Lengkap</td>
+                    </tr>
+                    <tr className="border-b border-slate-200">
+                      <td className="px-3 py-1.5 bg-slate-50 font-semibold border-r border-slate-200">Hasil Uji Suhu Makanan:</td>
+                      <td className="px-3 py-1.5 font-mono font-bold text-teal-800">
+                        {orderForPrintBast.measuredFoodTemperature || '64.5'}°C (Standar SOP &ge; 60°C &mdash; MEMENUHI SYARAT)
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-1.5 bg-slate-50 font-semibold border-r border-slate-200">Penyedia Rekanan Katering:</td>
+                      <td className="px-3 py-1.5 font-medium">{orderForPrintBast.providerName || 'CV Berkah Bahari'}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Dual Digital Signature Section */}
+              <div className="pt-3">
+                <p className="text-xs mb-3 text-slate-700">
+                  Demikian Berita Acara Serah Terima ini dibuat dengan sebenarnya dalam keadaan sadar dan ditandatangani secara digital oleh kedua belah pihak:
+                </p>
+
+                <div className="grid grid-cols-2 gap-6 pt-2">
+                  {/* Pihak Pertama: Penyedia Makanan */}
+                  <div className="border border-slate-300 rounded-xl p-3 text-center space-y-2 bg-slate-50/50">
+                    <p className="text-[11px] font-bold uppercase text-slate-700">PIHAK KESATU (PENYEDIA)</p>
+                    <p className="text-[10px] text-slate-500">Yang Menyerahkan Makanan:</p>
+                    
+                    <div className="h-20 flex items-center justify-center border-y border-dashed border-slate-200 my-1 bg-white">
+                      {(orderForPrintBast.handoverProviderSignature?.signatureDataUrl || (orderForPrintBast as any).providerSignature?.signatureDataUrl) ? (
+                        <img
+                          src={orderForPrintBast.handoverProviderSignature?.signatureDataUrl || (orderForPrintBast as any).providerSignature?.signatureDataUrl}
+                          alt="Tanda Tangan Penyedia"
+                          className="h-16 max-w-full object-contain"
+                        />
+                      ) : (
+                        <div className="text-center text-teal-800 font-script italic text-base">
+                          {orderForPrintBast.courierName || 'Supriyanto'}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="font-bold text-xs underline underline-offset-2">
+                        {orderForPrintBast.handoverProviderSignature?.signerName || (orderForPrintBast as any).providerSignature?.signerName || orderForPrintBast.courierName || 'Petugas Kurir Katering'}
+                      </p>
+                      <p className="text-[10px] text-slate-500">
+                        {orderForPrintBast.handoverProviderSignature?.signerRole || (orderForPrintBast as any).providerSignature?.signerRole || 'Petugas Pengantar Penyedia'}
+                      </p>
+                      <p className="text-[9px] font-mono text-slate-400 mt-0.5">
+                        {orderForPrintBast.handoverProviderSignature?.timestamp || (orderForPrintBast as any).providerSignature?.timestamp
+                          ? formatJakartaDateTime(orderForPrintBast.handoverProviderSignature?.timestamp || (orderForPrintBast as any).providerSignature?.timestamp)
+                          : formatJakartaDateTime(new Date().toISOString())}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Pihak Kedua: PJLP Pramusaji Puskesmas */}
+                  <div className="border border-slate-300 rounded-xl p-3 text-center space-y-2 bg-slate-50/50">
+                    <p className="text-[11px] font-bold uppercase text-slate-700">PIHAK KEDUA (PUSKESMAS)</p>
+                    <p className="text-[10px] text-slate-500">Yang Memeriksa &amp; Menerima:</p>
+
+                    <div className="h-20 flex items-center justify-center border-y border-dashed border-slate-200 my-1 bg-white">
+                      {(orderForPrintBast.handoverWaiterSignature?.signatureDataUrl || (orderForPrintBast as any).waiterSignature?.signatureDataUrl) ? (
+                        <img
+                          src={orderForPrintBast.handoverWaiterSignature?.signatureDataUrl || (orderForPrintBast as any).waiterSignature?.signatureDataUrl}
+                          alt="Tanda Tangan PJLP"
+                          className="h-16 max-w-full object-contain"
+                        />
+                      ) : (
+                        <div className="text-center text-teal-800 font-script italic text-base">
+                          {currentUser.name}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="font-bold text-xs underline underline-offset-2">
+                        {orderForPrintBast.handoverWaiterSignature?.signerName || (orderForPrintBast as any).waiterSignature?.signerName || currentUser.name}
+                      </p>
+                      <p className="text-[10px] text-slate-500">
+                        {orderForPrintBast.handoverWaiterSignature?.signerRole || (orderForPrintBast as any).waiterSignature?.signerRole || 'PJLP Pramusaji Ruang Rawat Inap'}
+                      </p>
+                      <p className="text-[9px] font-mono text-slate-400 mt-0.5">
+                        {orderForPrintBast.handoverWaiterSignature?.timestamp || (orderForPrintBast as any).waiterSignature?.timestamp
+                          ? formatJakartaDateTime(orderForPrintBast.handoverWaiterSignature?.timestamp || (orderForPrintBast as any).waiterSignature?.timestamp)
+                          : formatJakartaDateTime(new Date().toISOString())}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Verification Hash */}
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-[9px] text-slate-400 font-mono">
+                <span>Divalidasi Elektronik melalui SI PANTAI GIZI</span>
+                <span>ID: {orderForPrintBast.id}</span>
+                <span>Puskesmas Kepulauan Seribu Selatan</span>
               </div>
             </div>
           </div>

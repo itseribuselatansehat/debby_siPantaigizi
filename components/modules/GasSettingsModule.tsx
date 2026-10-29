@@ -26,6 +26,8 @@ export function GasSettingsModule() {
   const [spreadsheetId, setSpreadsheetId] = useState(settings.spreadsheetId || '');
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; details?: any } | null>(null);
+  const [isSettingUp, setIsSettingUp] = useState(false);
+  const [setupResult, setSetupResult] = useState<{ success: boolean; message: string; details?: any } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -38,7 +40,58 @@ export function GasSettingsModule() {
       spreadsheetId: spreadsheetId.trim(),
     });
     setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+    setTimeout(() => setSaveSuccess(false), 4000);
+  };
+
+  const handleSetupDatabase = async () => {
+    if (!gasUrl.trim()) {
+      alert('Silakan masukkan URL Web App Google Apps Script terlebih dahulu sebelum melakukan setup database.');
+      return;
+    }
+
+    setIsSettingUp(true);
+    setSetupResult(null);
+
+    try {
+      // First save to global settings
+      db.updateSettings({
+        gasWebAppUrl: gasUrl.trim(),
+        spreadsheetId: spreadsheetId.trim(),
+      });
+
+      const response = await fetch('/api/gas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gasWebAppUrl: gasUrl.trim(),
+          action: 'setupDatabase',
+          payload: { spreadsheetId: spreadsheetId.trim() },
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success && data.data && (data.data.status === 'SUCCESS' || data.data.sheets)) {
+        setSetupResult({
+          success: true,
+          message: `Setup Database Berhasil! Seluruh lembar kerja (MealOrders, Patients, Users, Menus, DietTypes, Providers, AuditLogs, AppSettings) telah dibuat otomatis di Spreadsheet: "${data.data.spreadsheetName || 'Database SI PANTAI GIZI'}".`,
+          details: data.data,
+        });
+        db.updateSettings({ lastGasSyncAt: new Date().toISOString() });
+      } else {
+        setSetupResult({
+          success: false,
+          message: data.message || data.data?.message || 'Gagal menjalankan setupDatabase otomatis. Pastikan Web App di-deploy dengan akses Anyone.',
+          details: data,
+        });
+      }
+    } catch (err: any) {
+      setSetupResult({
+        success: false,
+        message: err?.message || 'Terjadi kesalahan jaringan saat menjalankan setup database.',
+      });
+    } finally {
+      setIsSettingUp(false);
+    }
   };
 
   const handleTestConnection = async () => {
@@ -248,6 +301,63 @@ export function GasSettingsModule() {
               </div>
             )}
 
+            {/* 1-Click Setup Database Card */}
+            <div className="pt-3 border-t border-slate-100 space-y-2.5">
+              <div className="bg-gradient-to-r from-teal-50 to-emerald-50 p-3.5 rounded-xl border border-teal-200 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="p-1 bg-teal-700 text-white rounded-md text-[10px] font-bold">1-KLIK</span>
+                  <h4 className="font-bold text-slate-900 text-xs">
+                    Setup Database Otomatis di Google Sheets
+                  </h4>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  Inisialisasi seluruh tabel database (<strong>MealOrders, Patients, Users, Menus, DietTypes, Providers, AuditLogs, AppSettings</strong>) langsung di spreadsheet Anda secara otomatis tanpa perlu setup manual.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSetupDatabase}
+                  disabled={isSettingUp || !gasUrl}
+                  className={`w-full py-2 rounded-lg font-bold shadow-xs text-xs flex items-center justify-center gap-1.5 transition-colors ${
+                    gasUrl
+                      ? 'bg-emerald-800 hover:bg-emerald-900 text-white'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  }`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSettingUp ? 'animate-spin' : ''}`} />
+                  <span>
+                    {isSettingUp
+                      ? 'Sedang Menyiapkan Seluruh Tabel...'
+                      : '⚡ Setup Database Google Sheets Sekarang'}
+                  </span>
+                </button>
+              </div>
+
+              {/* Setup Result Indicator */}
+              {setupResult && (
+                <div
+                  className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
+                    setupResult.success
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      : 'bg-rose-50 border-rose-200 text-rose-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-bold">
+                    {setupResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-rose-600" />
+                    )}
+                    <span>{setupResult.message}</span>
+                  </div>
+                  {setupResult.details && (
+                    <pre className="p-2 bg-black/5 rounded text-[10px] font-mono overflow-x-auto">
+                      {JSON.stringify(setupResult.details, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Sync Action Button */}
             <div className="pt-3 border-t border-slate-100 space-y-2">
               <span className="font-semibold text-slate-800 block">Kirim & Sinkronkan Data Sekarang:</span>
@@ -257,7 +367,7 @@ export function GasSettingsModule() {
                 disabled={isSyncing || !gasUrl}
                 className={`w-full py-2.5 rounded-lg font-bold shadow-sm flex items-center justify-center gap-2 transition-colors ${
                   gasUrl
-                    ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                    ? 'bg-teal-700 hover:bg-teal-800 text-white'
                     : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                 }`}
               >

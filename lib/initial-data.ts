@@ -153,6 +153,24 @@ export const INITIAL_PATIENTS: Patient[] = [
     foodAllergies: ['Telur Bebek'],
     dietaryRestrictions: 'Diet Biasa Rendah Karbohidrat Tinggi Lemak Sehat, Porsi kecil sering',
   },
+  {
+    id: 'PAT-005',
+    mrn: 'RM-027519',
+    name: 'Ny. Rohana Kartika',
+    gender: 'P',
+    birthDate: '1982-06-19',
+    room: 'Ruang Flamboyan',
+    bed: 'Bed 02',
+    admissionDate: '2026-10-22',
+    dischargeDate: '2026-10-28',
+    dischargedAt: '2026-10-28T14:30:00.000Z',
+    dischargedBy: 'Siti Rahmawati, S.Tr.Gz, RD',
+    dischargeNotes: 'Kondisi stabil membaik, edukasi diet rendah kolesterol pasca rawat, kontrol poli penyakit dalam.',
+    status: 'DISCHARGED',
+    clinicalDiagnosis: 'Gastroenteritis Akut (GEA) Dehidrasi Sedang - Teratasi',
+    foodAllergies: ['Susu Sapi (Laktosa)'],
+    dietaryRestrictions: 'Diet Rendah Sisa & Laktosa Free',
+  },
 ];
 
 export const INITIAL_DIET_TYPES: DietType[] = [

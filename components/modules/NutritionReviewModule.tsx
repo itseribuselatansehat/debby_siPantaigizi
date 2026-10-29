@@ -88,7 +88,7 @@ export function NutritionReviewModule({ orders, onOrderUpdated }: NutritionRevie
 
     return (
       `*PESANAN MAKANAN PASIEN RAWAT INAP PUSKESMAS*\n` +
-      `Puskesmas Kecamatan Kepulauan Seribu Selatan\n\n` +
+      `Puskesmas Kepulauan Seribu Selatan\n\n` +
       `No. Order: *${order.orderNumber}*\n` +
       `Pasien: *${order.patientName}* (RM: ${order.patientMrn})\n` +
       `Kamar/Bed: *${order.room} (${order.bed})*\n` +

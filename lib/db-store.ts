@@ -242,6 +242,109 @@ export class DbStore {
     }
   }
 
+  /**
+   * Ahli gizi atau dokter memulangkan pasien rawat inap
+   * Otomatis membatalkan pesanan makanan yang belum terdistribusi ke pasien
+   */
+  public dischargePatient(params: {
+    patientId: string;
+    dischargedBy: string;
+    dischargeNotes?: string;
+    dischargeDate?: string;
+  }): { success: boolean; message: string; cancelledOrdersCount: number } {
+    const patient = this.state.patients.find((p) => p.id === params.patientId);
+    if (!patient) {
+      return { success: false, message: 'Data pasien tidak ditemukan.', cancelledOrdersCount: 0 };
+    }
+
+    const todayJakarta = params.dischargeDate || new Date().toISOString().split('T')[0];
+    const nowIso = new Date().toISOString();
+
+    patient.status = 'DISCHARGED';
+    patient.dischargeDate = todayJakarta;
+    patient.dischargedAt = nowIso;
+    patient.dischargedBy = params.dischargedBy;
+    patient.dischargeNotes = params.dischargeNotes || 'Pasien dinyatakan sembuh / diizinkan rawat jalan.';
+
+    // Cancel unserved pending meal orders for this patient
+    const cancellableStatuses = [
+      'DRAFT',
+      'SUBMITTED',
+      'NUTRITION_REVIEW',
+      'NUTRITION_APPROVED',
+      'SENT_TO_PROVIDER',
+      'PROVIDER_ACCEPTED',
+      'FOOD_PREPARATION',
+      'READY_TO_DELIVER',
+    ];
+
+    let cancelledCount = 0;
+    this.state.orders.forEach((o) => {
+      if (o.patientId === patient.id && cancellableStatuses.includes(o.status)) {
+        o.status = 'CANCELLED';
+        o.cancellationReason = `[PASIEN PULANG] Dihentikan oleh ${params.dischargedBy}. Catatan: ${params.dischargeNotes || 'Pasien telah pulang'}`;
+        o.billingStatus = 'TIDAK_DAPAT_DITAGIHKAN';
+        o.statusHistory.push({
+          status: 'CANCELLED',
+          timestamp: nowIso,
+          changedBy: params.dischargedBy,
+          role: 'AHLI_GIZI',
+          reasonOrNotes: o.cancellationReason,
+        });
+        cancelledCount++;
+      }
+    });
+
+    this.logAudit(
+      'DISCHARGE_PATIENT',
+      'Data Pasien Rawat Inap',
+      patient.mrn,
+      `Pasien ${patient.name} (${patient.mrn}) dipulangkan oleh ${params.dischargedBy}. ${cancelledCount} order makanan yang belum tersaji otomatis dibatalkan.`
+    );
+
+    this.saveState();
+    return {
+      success: true,
+      message: `Pasien ${patient.name} berhasil diberi status PULANG. ${cancelledCount} pesanan makanan yang belum tersaji otomatis dibatalkan.`,
+      cancelledOrdersCount: cancelledCount,
+    };
+  }
+
+  /**
+   * Rawat kembali pasien jika ada penerimaan rawat inap ulang
+   */
+  public readmitPatient(params: {
+    patientId: string;
+    room: string;
+    bed: string;
+    readmittedBy: string;
+    clinicalDiagnosis?: string;
+  }): { success: boolean; message: string } {
+    const patient = this.state.patients.find((p) => p.id === params.patientId);
+    if (!patient) return { success: false, message: 'Data pasien tidak ditemukan.' };
+
+    const todayJakarta = new Date().toISOString().split('T')[0];
+    patient.status = 'ACTIVE';
+    patient.room = params.room;
+    patient.bed = params.bed;
+    patient.admissionDate = todayJakarta;
+    patient.dischargeDate = undefined;
+    patient.dischargedAt = undefined;
+    patient.dischargedBy = undefined;
+    patient.dischargeNotes = undefined;
+    if (params.clinicalDiagnosis) patient.clinicalDiagnosis = params.clinicalDiagnosis;
+
+    this.logAudit(
+      'READMIT_PATIENT',
+      'Data Pasien Rawat Inap',
+      patient.mrn,
+      `Pasien ${patient.name} dirawat kembali oleh ${params.readmittedBy} di ${params.room} ${params.bed}`
+    );
+
+    this.saveState();
+    return { success: true, message: `Pasien ${patient.name} aktif kembali di ${params.room} ${params.bed}` };
+  }
+
   // --- Master Data ---
   public getRooms() {
     return [...this.state.rooms];

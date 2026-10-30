@@ -573,6 +573,39 @@ export function GasSettingsModule() {
               <li>Salin URL Web App dan tempel ke kolom di atas, lalu klik <strong>Simpan Konfigurasi Global</strong>.</li>
             </ol>
           </div>
+
+          {/* Hostinger 403 Forbidden Solution Guide */}
+          <div className="bg-amber-50/70 rounded-xl border border-amber-200 p-5 shadow-sm space-y-3 text-xs">
+            <div className="flex items-center gap-2 text-amber-900 font-bold text-sm">
+              <Globe className="w-4 h-4 text-amber-700" />
+              <h4>Panduan Solusi 403 Forbidden di Hostinger (sipantaigizi.puskesmasseribuselatan.com)</h4>
+            </div>
+            <p className="text-slate-700 leading-relaxed">
+              Jika domain menampilkan <strong className="text-rose-700">403 Forbidden (Access to this resource on the server is denied!)</strong>, itu berarti repository Git sudah ditarik ke Hostinger namun <strong>Node.js Application</strong> di hPanel belum diaktifkan atau belum menjalankan build.
+            </p>
+            <div className="bg-white rounded-lg p-3.5 border border-amber-200/80 space-y-2 text-slate-700">
+              <p className="font-semibold text-slate-900">3 Langkah Mengaktifkan di hPanel Hostinger:</p>
+              <ol className="list-decimal list-inside space-y-1.5 leading-relaxed text-[11px]">
+                <li>
+                  Buka <strong>hPanel Hostinger</strong> &gt; Masuk ke <strong>Websites</strong> &gt; Pilih domain <code>sipantaigizi.puskesmasseribuselatan.com</code>.
+                </li>
+                <li>
+                  Di menu kiri, buka <strong>Advanced &gt; Node.js</strong>:
+                  <ul className="list-disc list-inside ml-4 mt-1 text-slate-600 space-y-0.5">
+                    <li>Node.js version: <strong>20.x</strong></li>
+                    <li>Application root: <code>public_html</code> (atau folder repo subdomain Anda)</li>
+                    <li>Application startup file: <code>server.js</code></li>
+                  </ul>
+                </li>
+                <li>
+                  Klik tombol <strong>Run NPM Install</strong>, kemudian di terminal jalankan <code>npm run build</code>, dan klik <strong>Start / Restart</strong>.
+                </li>
+              </ol>
+              <p className="text-[11px] text-teal-800 font-medium pt-1 border-t border-slate-100">
+                ✓ File <code>.htaccess</code> dan <code>server.js</code> di repository ini sudah diperbarui otomatis untuk menangani proxy Hostinger secara mulus.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Right Column: Code.gs Copyable Script */}

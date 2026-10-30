@@ -36,7 +36,7 @@ export function NutritionReviewModule({ orders, onOrderUpdated }: NutritionRevie
   const [showReviewModal, setShowReviewModal] = useState(false);
 
   // Checkbox schedules state with fixed price points
-  // Sarapan : 25.000, Makan Siang : 45.000, Makan Malam : 45.000
+  // 1. Sarapan : 25.000, 2. Makan Siang : 47.000, 3. Makan Malam : 47.000
   const [scheduleChecks, setScheduleChecks] = useState<Record<MealSchedule, boolean>>({
     SARAPAN: false,
     SIANG: true,
@@ -59,8 +59,8 @@ export function NutritionReviewModule({ orders, onOrderUpdated }: NutritionRevie
   const calculateCheckedTotal = () => {
     let sum = 0;
     if (scheduleChecks.SARAPAN) sum += 25000;
-    if (scheduleChecks.SIANG) sum += 45000;
-    if (scheduleChecks.MALAM) sum += 45000;
+    if (scheduleChecks.SIANG) sum += 47000;
+    if (scheduleChecks.MALAM) sum += 47000;
     return sum * adjustedPortion;
   };
 
@@ -83,7 +83,7 @@ export function NutritionReviewModule({ orders, onOrderUpdated }: NutritionRevie
 
   const generateWhatsAppMessageForProvider = (order: MealOrder) => {
     const schedules = order.selectedSchedules && order.selectedSchedules.length > 0
-      ? order.selectedSchedules.map((s) => (s === 'SARAPAN' ? 'Sarapan (25k)' : s === 'SIANG' ? 'Siang (45k)' : 'Malam (45k)')).join(', ')
+      ? order.selectedSchedules.map((s) => (s === 'SARAPAN' ? 'Sarapan (25k)' : s === 'SIANG' ? 'Siang (47k)' : 'Malam (47k)')).join(', ')
       : order.schedule;
 
     return (
@@ -343,7 +343,7 @@ export function NutritionReviewModule({ orders, onOrderUpdated }: NutritionRevie
                           />
                           <span>Makan Siang</span>
                         </div>
-                        <span className="font-mono text-[11px] text-teal-800">Rp 45.000</span>
+                        <span className="font-mono text-[11px] text-teal-800">Rp 47.000</span>
                       </label>
 
                       <label className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition-all ${
@@ -358,7 +358,7 @@ export function NutritionReviewModule({ orders, onOrderUpdated }: NutritionRevie
                           />
                           <span>Makan Malam</span>
                         </div>
-                        <span className="font-mono text-[11px] text-teal-800">Rp 45.000</span>
+                        <span className="font-mono text-[11px] text-teal-800">Rp 47.000</span>
                       </label>
                     </div>
 

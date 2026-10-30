@@ -69,7 +69,7 @@ export function LandingPage({ onLoginAsUser }: LandingPageProps) {
       icon: HeartPulse,
       description: 'Verifikasi klinis diet, penetapan jadwal makan & tarif, serta koordinasi ke penyedia katering.',
       responsibilities: [
-        'Checkbox pemilihan jadwal: Sarapan (25k), Siang (45k), Malam (45k)',
+        'Checkbox pemilihan jadwal: Sarapan (25k), Siang (47k), Malam (47k)',
         'Penyusunan menu katering & instruksi diet klinis',
         'Forward rincian pesanan ke WhatsApp katering rekanan',
       ],

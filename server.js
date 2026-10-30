@@ -1,50 +1,53 @@
 const { createServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = process.env.HOSTNAME || '0.0.0.0';
-const port = parseInt(process.env.PORT || '3000', 10);
 
-// Path to Next.js standalone build if present
-const standaloneServerPath = path.join(__dirname, '.next', 'standalone', 'server.js');
+// Hostinger / Passenger compatibility:
+// Passenger often provides a Unix domain socket path in PORT (e.g. /passenger/socket...)
+// Do not use parseInt unconditionally, as parseInt(socketPath) yields NaN!
+const rawPort = process.env.PORT || '3000';
+const isSocket = isNaN(Number(rawPort));
+const listenTarget = isSocket ? rawPort : Number(rawPort);
 
-if (!dev && fs.existsSync(standaloneServerPath)) {
-  // Use Next.js standalone server if available
-  process.env.PORT = String(port);
-  process.env.HOSTNAME = hostname;
-  try {
-    require(standaloneServerPath);
-  } catch (err) {
-    console.warn('Failed to load standalone server, falling back to standard next server:', err);
-    startStandardServer();
-  }
-} else {
-  startStandardServer();
-}
+const app = next({ 
+  dev, 
+  hostname: isSocket ? undefined : hostname, 
+  port: isSocket ? undefined : listenTarget 
+});
+const handle = app.getRequestHandler();
 
-function startStandardServer() {
-  const app = next({ dev, hostname, port });
-  const handle = app.getRequestHandler();
+console.log(`> Menyiapkan SI PANTAI GIZI (Production Mode: ${!dev})...`);
 
-  app.prepare().then(() => {
-    createServer(async (req, res) => {
+app.prepare()
+  .then(() => {
+    const server = createServer(async (req, res) => {
       try {
         const parsedUrl = parse(req.url, true);
         await handle(req, res, parsedUrl);
       } catch (err) {
-        console.error('Error occurred handling request:', req.url, err);
+        console.error('Error saat melayani request:', req.url, err);
         res.statusCode = 500;
-        res.end('Internal Server Error');
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.end('Internal Server Error - SI PANTAI GIZI');
       }
-    }).listen(port, hostname, (err) => {
-      if (err) throw err;
-      console.log(`> SI PANTAI GIZI Server running on http://${hostname}:${port}`);
     });
-  }).catch((err) => {
-    console.error('Error initializing Next.js app:', err);
+
+    if (isSocket) {
+      server.listen(listenTarget, () => {
+        console.log(`> SI PANTAI GIZI aktif pada Unix Socket: ${listenTarget}`);
+      });
+    } else {
+      server.listen(listenTarget, hostname, () => {
+        console.log(`> SI PANTAI GIZI aktif dan melayani request di http://${hostname}:${listenTarget}`);
+      });
+    }
+  })
+  .catch((err) => {
+    console.error('Gagal menginisialisasi server Next.js:', err);
     process.exit(1);
   });
-}

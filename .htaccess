@@ -1,26 +1,39 @@
 # ====================================================================
 # HOSTINGER LITESPEED & APACHE REVERSE PROXY CONFIGURATION
 # SI PANTAI GIZI - PUSKESMAS KEPULAUAN SERIBU SELATAN
-# Solusi Mengatasi 403 Forbidden pada Subdomain sipantaigizi.puskesmasseribuselatan.com
+# Solusi Definitif Mengatasi 403 Forbidden pada sipantaigizi.puskesmasseribuselatan.com
 # ====================================================================
 
-# Matikan directory browsing untuk keamanan
+# 1. Izinkan akses penuh ke direktori dan cegah 403 Forbidden dari web server
+<IfModule mod_authz_core.c>
+  Require all granted
+</IfModule>
+
+# Matikan directory browsing bawaan server
 Options -Indexes
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
 
-  # Lewatkan file dan folder fisik yang benar-benar ada (misal folder public, assets, robots.txt)
-  RewriteCond %{REQUEST_FILENAME} -f [OR]
-  RewriteCond %{REQUEST_FILENAME} -d
+  # 2. Lewatkan HANYA file fisik statis yang benar-benar ada di disk (seperti gambar, favicon, manifest)
+  # PENTING: JANGAN gunakan RewriteCond %{REQUEST_FILENAME} -d karena rute root '/' adalah direktori!
+  # Jika -d digunakan, LiteSpeed/Apache akan mencegat rute '/' dan memunculkan layar 403 Forbidden!
+  RewriteCond %{REQUEST_FILENAME} -f
   RewriteRule ^ - [L]
 
-  # Teruskan semua rute ke aplikasi Next.js (port 3000 atau port internal Node.js)
-  RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
+  # 3. Teruskan semua rute halaman & API ke aplikasi Node.js Next.js (port 3000)
+  <IfModule mod_proxy.c>
+    RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
+  </IfModule>
 </IfModule>
 
-# Header forwarding untuk SSL / HTTPS
+# 4. Header forwarding untuk SSL / HTTPS di Hostinger
 <IfModule mod_headers.c>
   RequestHeader set X-Forwarded-Proto "https" env=HTTPS
+  RequestHeader set X-Forwarded-Port "443" env=HTTPS
 </IfModule>
+
+# 5. Konfigurasi Alternatif CloudLinux / Phusion Passenger (Jika Hostinger Node.js Selector Digunakan)
+# Jika Hostinger hPanel Anda menggunakan CloudLinux NodeJS Selector,
+# pastikan Application Startup File di hPanel diatur ke: server.js

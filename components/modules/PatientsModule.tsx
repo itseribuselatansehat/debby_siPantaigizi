@@ -50,6 +50,8 @@ export function PatientsModule({ patients, onPatientUpdated }: PatientsModulePro
   const [clinicalDiagnosis, setClinicalDiagnosis] = useState('');
   const [allergiesInput, setAllergiesInput] = useState('');
   const [dietaryRestrictions, setDietaryRestrictions] = useState('');
+  const [registeredByName, setRegisteredByName] = useState('dr. Farhan Pratama');
+  const [attendingNurseName, setAttendingNurseName] = useState('Ns. Ratna Wulandari, S.Kep');
 
   const currentUser = db.getCurrentUser();
 
@@ -57,7 +59,9 @@ export function PatientsModule({ patients, onPatientUpdated }: PatientsModulePro
     const matchesSearch =
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.mrn.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.clinicalDiagnosis.toLowerCase().includes(searchQuery.toLowerCase());
+      p.clinicalDiagnosis.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.registeredByName && p.registeredByName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (p.attendingNurseName && p.attendingNurseName.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesRoom = filterRoom === 'ALL' || p.room === filterRoom;
     const matchesStatus =
@@ -90,6 +94,8 @@ export function PatientsModule({ patients, onPatientUpdated }: PatientsModulePro
       room: roomObj.room,
       bed: roomObj.bed,
       admissionDate,
+      registeredByName: registeredByName.trim() || currentUser.name,
+      attendingNurseName: attendingNurseName.trim() || 'Ns. Ratna Wulandari, S.Kep',
       status: 'ACTIVE',
       clinicalDiagnosis: clinicalDiagnosis.trim(),
       foodAllergies: allergies,
@@ -290,6 +296,17 @@ export function PatientsModule({ patients, onPatientUpdated }: PatientsModulePro
                     <p className="text-slate-600 text-[11px]">{patient.dietaryRestrictions}</p>
                   </div>
                 )}
+                {/* Petugas Pendaftar & Perawat Ruangan */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1.5 border-t border-slate-100 text-[11px]">
+                  <div>
+                    <span className="text-slate-400 text-[10px] block font-medium">Petugas Pendaftar:</span>
+                    <p className="font-semibold text-slate-800">{patient.registeredByName || 'Petugas Rawat Inap'}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[10px] block font-medium">Perawat Penanggung Jawab:</span>
+                    <p className="font-semibold text-teal-800">{patient.attendingNurseName || 'Perawat Ruangan'}</p>
+                  </div>
+                </div>
                 {isDischarged && patient.dischargeNotes && (
                   <div className="pt-1.5 mt-1 border-t border-slate-100">
                     <span className="text-slate-400 text-[10px] block font-semibold text-purple-900">
@@ -460,15 +477,36 @@ export function PatientsModule({ patients, onPatientUpdated }: PatientsModulePro
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Catatan Pantangan / Diet Khusus</label>
-                <textarea
-                  rows={2}
-                  value={dietaryRestrictions}
-                  onChange={(e) => setDietaryRestrictions(e.target.value)}
-                  placeholder="Instruksi khusus dietetika dari dokter penanggung jawab..."
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs"
-                />
+              {/* Nama Petugas Pendaftar & Nama Perawat Ruangan */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-teal-50/60 rounded-xl border border-teal-200">
+                <div>
+                  <label className="block font-semibold text-teal-950 mb-1">
+                    Nama Petugas Pendaftar *
+                  </label>
+                  <input
+                    type="text"
+                    value={registeredByName}
+                    onChange={(e) => setRegisteredByName(e.target.value)}
+                    placeholder="Nama petugas loket / pendaftaran"
+                    className="w-full px-3 py-1.5 border border-teal-300 rounded-lg text-xs bg-white text-slate-800 focus:ring-1 focus:ring-teal-500"
+                    required
+                  />
+                  <span className="text-[10px] text-teal-700 block mt-0.5">Petugas admisi rawat inap</span>
+                </div>
+                <div>
+                  <label className="block font-semibold text-teal-950 mb-1">
+                    Nama Perawat PJ Ruangan *
+                  </label>
+                  <input
+                    type="text"
+                    value={attendingNurseName}
+                    onChange={(e) => setAttendingNurseName(e.target.value)}
+                    placeholder="Contoh: Ns. Ratna Wulandari, S.Kep"
+                    className="w-full px-3 py-1.5 border border-teal-300 rounded-lg text-xs bg-white text-slate-800 focus:ring-1 focus:ring-teal-500"
+                    required
+                  />
+                  <span className="text-[10px] text-teal-700 block mt-0.5">Perawat penanggung jawab pasien</span>
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">

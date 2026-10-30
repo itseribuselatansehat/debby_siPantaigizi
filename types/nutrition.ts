@@ -22,8 +22,8 @@ export type MealSchedule = 'SARAPAN' | 'SIANG' | 'MALAM' | 'SORE';
 
 export const MEAL_PRICES: Record<MealSchedule, number> = {
   SARAPAN: 25000,
-  SIANG: 45000,
-  MALAM: 45000,
+  SIANG: 47000,
+  MALAM: 47000,
   SORE: 15000,
 };
 
@@ -62,6 +62,8 @@ export interface Patient {
   dischargedAt?: string;
   dischargedBy?: string;
   dischargeNotes?: string;
+  registeredByName?: string; // Nama Petugas Pendaftar
+  attendingNurseName?: string; // Nama Perawat Penanggung Jawab Ruangan
   status: 'ACTIVE' | 'DISCHARGED' | 'TRANSFERRED';
   clinicalDiagnosis: string;
   foodAllergies: string[];

@@ -58,6 +58,7 @@ function setupDatabaseSheets() {
     [SHEET_NAMES.PATIENTS]: [
       'id', 'mrn', 'name', 'gender', 'birthDate', 'room', 'bed',
       'admissionDate', 'dischargeDate', 'dischargedAt', 'dischargedBy', 'dischargeNotes',
+      'registeredByName', 'attendingNurseName',
       'status', 'clinicalDiagnosis', 'foodAllergies', 'dietaryRestrictions'
     ],
     [SHEET_NAMES.USERS]: [
@@ -225,6 +226,9 @@ function doPost(e) {
       // Sinkronisasi data menyeluruh dari Web App ke Google Sheets
       const payload = postData.payload || {};
       
+      if (payload.patients && Array.isArray(payload.patients)) {
+        upsertPatients(ss, payload.patients);
+      }
       if (payload.orders && Array.isArray(payload.orders)) {
         upsertOrders(ss, payload.orders);
       }
@@ -354,6 +358,57 @@ function appendAuditLogs(ss, logs) {
       l.referenceId || '',
       l.details || ''
     ]);
+  });
+}
+
+/**
+ * Simpan atau perbarui data master pasien ke Sheet Patients
+ */
+function upsertPatients(ss, patients) {
+  let sheet = ss.getSheetByName(SHEET_NAMES.PATIENTS);
+  if (!sheet) {
+    setupDatabaseSheets();
+    sheet = ss.getSheetByName(SHEET_NAMES.PATIENTS);
+  }
+
+  const existingData = sheet.getDataRange().getValues();
+  const headers = existingData[0];
+  const idColIndex = headers.indexOf('id');
+
+  const existingMap = {};
+  for (let r = 1; r < existingData.length; r++) {
+    const idVal = existingData[r][idColIndex];
+    if (idVal) existingMap[idVal] = r + 1;
+  }
+
+  patients.forEach(function(p) {
+    const rowValues = [
+      p.id || '',
+      p.mrn || '',
+      p.name || '',
+      p.gender || '',
+      p.birthDate || '',
+      p.room || '',
+      p.bed || '',
+      p.admissionDate || '',
+      p.dischargeDate || '',
+      p.dischargedAt || '',
+      p.dischargedBy || '',
+      p.dischargeNotes || '',
+      p.registeredByName || '',
+      p.attendingNurseName || '',
+      p.status || 'ACTIVE',
+      p.clinicalDiagnosis || '',
+      Array.isArray(p.foodAllergies) ? p.foodAllergies.join(', ') : (p.foodAllergies || ''),
+      p.dietaryRestrictions || ''
+    ];
+
+    if (existingMap[p.id]) {
+      const rowNum = existingMap[p.id];
+      sheet.getRange(rowNum, 1, 1, rowValues.length).setValues([rowValues]);
+    } else {
+      sheet.appendRow(rowValues);
+    }
   });
 }
 

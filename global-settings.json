@@ -5,11 +5,13 @@
   "phone": "(021) 645-8901",
   "nutritionistPhone": "6281287654321",
   "providerPhone": "6281809123456",
+  "dkiLogoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/eb/Coat_of_arms_of_Jakarta.svg/480px-Coat_of_arms_of_Jakarta.svg.png",
+  "kemenkesLogoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Kementerian_Kesehatan_Republik_Indonesia.svg/512px-Kementerian_Kesehatan_Republik_Indonesia.svg.png",
   "gasWebAppUrl": "",
   "spreadsheetId": "",
   "googleDriveFolderId": "1xsrknKxLZVC-YryvoTCbavbUkEn4EwLk",
   "autoSyncGas": false,
   "minFoodTempServeCelsius": 60,
   "maxFoodTempServeCelsius": 75,
-  "updatedAt": "2026-10-29T16:51:00.000Z"
+  "updatedAt": "2026-10-31T09:25:00.000Z"
 }

@@ -187,6 +187,7 @@ export interface MealOrder {
   measuredFoodTemperature?: string;
   discrepancyAction?: 'DITERIMA_SESUAI' | 'DITERIMA_DENGAN_CATATAN' | 'DITOLAK_MINTA_GANTI' | 'DIBATALKAN';
   discrepancyNotes?: string;
+  deliveryPhotoUrl?: string; // Foto bukti serah terima makanan dari kurir penyedia
   handoverProviderSignature?: DigitalSignature;
   handoverWaiterSignature?: DigitalSignature;
 
@@ -249,6 +250,8 @@ export interface AppSettings {
   phone: string;
   nutritionistPhone: string; // Nomor WA Petugas Gizi
   providerPhone: string; // Nomor WA Penyedia Katering
+  dkiLogoUrl?: string; // Logo Jaya Raya Provinsi DKI Jakarta untuk kop surat
+  kemenkesLogoUrl?: string; // Logo Kesehatan / Kemenkes RI untuk kop surat
   gasWebAppUrl: string;
   spreadsheetId: string;
   googleDriveFolderId?: string; // ID Google Drive Folder untuk penyimpanan seluruh foto dokumentasi

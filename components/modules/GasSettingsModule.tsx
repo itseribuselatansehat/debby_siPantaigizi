@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import React, { useState } from 'react';
@@ -20,7 +21,13 @@ import {
   HardDrive,
   Camera,
   Globe,
+  Image as ImageIcon,
 } from 'lucide-react';
+import {
+  formatDriveOrDirectImageUrl,
+  DEFAULT_DKI_LOGO,
+  DEFAULT_KEMENKES_LOGO,
+} from '@/lib/print-bast-service';
 
 export function GasSettingsModule() {
   const db = DbStore.getInstance();
@@ -29,6 +36,8 @@ export function GasSettingsModule() {
   const [gasUrl, setGasUrl] = useState(settings.gasWebAppUrl || '');
   const [spreadsheetId, setSpreadsheetId] = useState(settings.spreadsheetId || '');
   const [driveFolderId, setDriveFolderId] = useState(settings.googleDriveFolderId || TARGET_GOOGLE_DRIVE_FOLDER_ID);
+  const [dkiLogoUrl, setDkiLogoUrl] = useState(settings.dkiLogoUrl || DEFAULT_DKI_LOGO);
+  const [kemenkesLogoUrl, setKemenkesLogoUrl] = useState(settings.kemenkesLogoUrl || DEFAULT_KEMENKES_LOGO);
 
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; details?: any } | null>(null);
@@ -51,6 +60,8 @@ export function GasSettingsModule() {
       gasWebAppUrl: gasUrl.trim(),
       spreadsheetId: spreadsheetId.trim(),
       googleDriveFolderId: driveFolderId.trim() || TARGET_GOOGLE_DRIVE_FOLDER_ID,
+      dkiLogoUrl: dkiLogoUrl.trim() || DEFAULT_DKI_LOGO,
+      kemenkesLogoUrl: kemenkesLogoUrl.trim() || DEFAULT_KEMENKES_LOGO,
     });
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 4000);
@@ -212,6 +223,7 @@ export function GasSettingsModule() {
     try {
       const orders = db.getOrders();
       const auditLogs = db.getAuditLogs();
+      const patients = db.getPatients();
 
       const response = await fetch('/api/gas', {
         method: 'POST',
@@ -222,13 +234,14 @@ export function GasSettingsModule() {
           payload: {
             orders,
             auditLogs,
+            patients,
           },
         }),
       });
 
       const res = await response.json();
       if (res.success) {
-        setSyncResult(`Sinkronisasi berhasil! ${orders.length} order dan ${auditLogs.length} audit logs tersimpan di Google Sheets.`);
+        setSyncResult(`Sinkronisasi berhasil! ${orders.length} order, ${patients.length} data pasien rawat inap, dan ${auditLogs.length} audit logs tersimpan di Google Sheets.`);
         db.updateSettings({ lastGasSyncAt: new Date().toISOString() });
       } else {
         setSyncResult(`Gagal sinkronisasi: ${res.message || 'Cek URL Web App GAS Anda.'}`);
@@ -369,6 +382,129 @@ export function GasSettingsModule() {
                 <p className="text-[11px] text-blue-800 leading-relaxed">
                   Seluruh foto dokumentasi makanan yang diambil oleh pramusaji/PJLP saat penyajian ke pasien akan otomatis masuk ke folder Google Drive ini.
                 </p>
+              </div>
+
+              {/* Pengaturan Logo Kop Surat Resmi (DKI Jakarta & Kementerian Kesehatan) */}
+              <div className="p-4 bg-teal-50/70 border border-teal-200 rounded-xl space-y-3.5">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-teal-800" />
+                    <h4 className="font-bold text-teal-950 text-xs">
+                      Logo Kop Surat Resmi Dokumen (DKI Jakarta &amp; Kemenkes)
+                    </h4>
+                  </div>
+                  <span className="text-[10px] bg-teal-100 text-teal-900 px-2.5 py-0.5 rounded-full font-semibold border border-teal-200">
+                    Tersimpan Global &amp; Tampil di Semua Cetak PDF
+                  </span>
+                </div>
+                <p className="text-[11px] text-teal-900 leading-relaxed">
+                  Kedua logo ini akan otomatis dicetak pada Kop Surat Berita Acara Serah Terima (BAST-GIZI), Bukti Penyerahan Pasien (BPM-GIZI), dan Rekap Tagihan. Anda dapat memasukkan link URL langsung atau link Google Drive asset (contoh: <code>drive.google.com/file/d/ID/view</code>).
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+                  {/* Logo Jaya Raya DKI Jakarta */}
+                  <div className="bg-white p-3 rounded-lg border border-teal-200/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-800 text-[11px]">
+                        1. Logo Jaya Raya DKI Jakarta (Kiri Kop)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setDkiLogoUrl(DEFAULT_DKI_LOGO)}
+                        className="text-[10px] text-teal-700 hover:text-teal-900 underline font-medium"
+                      >
+                        Reset Default Resmi
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={dkiLogoUrl}
+                      onChange={(e) => setDkiLogoUrl(e.target.value)}
+                      placeholder="Link Google Drive / URL Logo DKI Jakarta"
+                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded text-xs font-mono"
+                    />
+                    <div className="flex items-center gap-3 pt-1">
+                      <div className="w-12 h-12 rounded border border-slate-200 bg-slate-50 flex items-center justify-center p-1 shrink-0 overflow-hidden">
+                        <img
+                          src={formatDriveOrDirectImageUrl(dkiLogoUrl) || DEFAULT_DKI_LOGO}
+                          alt="Preview Logo DKI"
+                          className="max-h-full max-w-full object-contain"
+                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                        />
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        <span className="font-semibold text-slate-700 block">Pratinjau Logo DKI Jakarta</span>
+                        Tampil pada sisi kiri kop surat resmi Puskesmas.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Logo Kementerian Kesehatan RI */}
+                  <div className="bg-white p-3 rounded-lg border border-teal-200/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-800 text-[11px]">
+                        2. Logo Kesehatan / Kemenkes RI (Kanan Kop)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setKemenkesLogoUrl(DEFAULT_KEMENKES_LOGO)}
+                        className="text-[10px] text-teal-700 hover:text-teal-900 underline font-medium"
+                      >
+                        Reset Default Resmi
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={kemenkesLogoUrl}
+                      onChange={(e) => setKemenkesLogoUrl(e.target.value)}
+                      placeholder="Link Google Drive / URL Logo Kemenkes RI"
+                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded text-xs font-mono"
+                    />
+                    <div className="flex items-center gap-3 pt-1">
+                      <div className="w-12 h-12 rounded border border-slate-200 bg-slate-50 flex items-center justify-center p-1 shrink-0 overflow-hidden">
+                        <img
+                          src={formatDriveOrDirectImageUrl(kemenkesLogoUrl) || DEFAULT_KEMENKES_LOGO}
+                          alt="Preview Logo Kemenkes"
+                          className="max-h-full max-w-full object-contain"
+                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                        />
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        <span className="font-semibold text-slate-700 block">Pratinjau Logo Kemenkes RI</span>
+                        Tampil pada sisi kanan kop surat resmi Puskesmas.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live Kop Preview Box */}
+                <div className="bg-white p-3 rounded-lg border border-slate-200 mt-2">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Simulasi Tampilan Kop Surat Cetak (A4 PDF):
+                  </div>
+                  <div className="flex items-center justify-between gap-3 border-b-2 border-black pb-2 pt-1 text-center">
+                    <div className="w-12 h-12 shrink-0 flex items-center justify-center">
+                      <img
+                        src={formatDriveOrDirectImageUrl(dkiLogoUrl) || DEFAULT_DKI_LOGO}
+                        alt="DKI"
+                        className="max-h-12 max-w-full object-contain"
+                      />
+                    </div>
+                    <div className="flex-1 space-y-0.5 text-[9px] text-black">
+                      <div className="font-bold uppercase tracking-wide">PEMERINTAH PROVINSI DAERAH KHUSUS IBUKOTA JAKARTA</div>
+                      <div className="font-bold uppercase tracking-wide">DINAS KESEHATAN KABUPATEN ADMINISTRASI KEPULAUAN SERIBU</div>
+                      <div className="font-extrabold uppercase text-[11px] tracking-wider">PUSKESMAS KEPULAUAN SERIBU SELATAN</div>
+                      <div className="text-slate-600 text-[8.5px]">Jl. Dermaga Pelabuhan Utama No. 4, Pulau Tidung · Telp: (021) 645-8901</div>
+                    </div>
+                    <div className="w-12 h-12 shrink-0 flex items-center justify-center">
+                      <img
+                        src={formatDriveOrDirectImageUrl(kemenkesLogoUrl) || DEFAULT_KEMENKES_LOGO}
+                        alt="Kemenkes"
+                        className="max-h-12 max-w-full object-contain"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 pt-2">

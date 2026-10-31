@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import React, { useState } from 'react';
@@ -15,6 +16,11 @@ import {
   DollarSign,
   AlertCircle,
 } from 'lucide-react';
+import {
+  formatDriveOrDirectImageUrl,
+  DEFAULT_DKI_LOGO,
+  DEFAULT_KEMENKES_LOGO,
+} from '@/lib/print-bast-service';
 
 interface BillingModuleProps {
   orders: MealOrder[];
@@ -23,6 +29,9 @@ interface BillingModuleProps {
 
 export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
   const db = DbStore.getInstance();
+  const settings = db.getSettings();
+  const dkiLogo = formatDriveOrDirectImageUrl(settings.dkiLogoUrl) || DEFAULT_DKI_LOGO;
+  const kemenkesLogo = formatDriveOrDirectImageUrl(settings.kemenkesLogoUrl) || DEFAULT_KEMENKES_LOGO;
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMonth, setFilterMonth] = useState('2026-10');
   const [filterStatus, setFilterStatus] = useState('ALL');
@@ -242,14 +251,48 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
 
       {/* Invoice Details Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        {/* Print Header */}
-        <div className="p-4 border-b border-slate-200 hidden print:block text-center">
-          <h2 className="text-base font-bold uppercase tracking-wider text-black">
-            REKAPITULASI TAGIHAN PEMBERIAN MAKANAN PASIEN RAWAT INAP
-          </h2>
-          <p className="text-xs text-black">
-            Puskesmas Kepulauan Seribu Selatan — Periode {filterMonth}
-          </p>
+        {/* Print Header Resmi Dua Logo */}
+        <div className="p-4 border-b-2 border-black hidden print:block text-black">
+          <div className="flex items-center justify-between gap-4 pb-2 border-b-2 border-black">
+            <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+              <img
+                src={dkiLogo}
+                alt="Logo DKI"
+                className="max-h-16 max-w-full object-contain"
+                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+              />
+            </div>
+            <div className="text-center flex-1 space-y-0.5">
+              <p className="text-[11px] font-bold uppercase tracking-wide">
+                PEMERINTAH PROVINSI DAERAH KHUSUS IBUKOTA JAKARTA
+              </p>
+              <p className="text-[11px] font-bold uppercase tracking-wide">
+                DINAS KESEHATAN KABUPATEN ADMINISTRASI KEPULAUAN SERIBU
+              </p>
+              <h1 className="text-sm font-extrabold uppercase tracking-wider">
+                PUSKESMAS KEPULAUAN SERIBU SELATAN
+              </h1>
+              <p className="text-[10px] text-slate-600">
+                Jl. Dermaga Pelabuhan Utama No. 4, Pulau Tidung, Kepulauan Seribu · Telp/WA: (021) 645-8901
+              </p>
+            </div>
+            <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+              <img
+                src={kemenkesLogo}
+                alt="Logo Kemenkes"
+                className="max-h-16 max-w-full object-contain"
+                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+              />
+            </div>
+          </div>
+          <div className="text-center pt-2">
+            <h2 className="text-sm font-bold uppercase tracking-wider">
+              REKAPITULASI TAGIHAN PEMBERIAN MAKANAN PASIEN RAWAT INAP
+            </h2>
+            <p className="text-xs text-slate-700">
+              Periode Rekap: {filterMonth} · Dicetak pada: {formatJakartaDate(new Date().toISOString())}
+            </p>
+          </div>
         </div>
 
         <div className="overflow-x-auto">

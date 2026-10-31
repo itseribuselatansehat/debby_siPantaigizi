@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import React, { useState } from 'react';
@@ -14,6 +15,12 @@ import {
   ShieldCheck,
   Calendar,
 } from 'lucide-react';
+import { DbStore } from '@/lib/db-store';
+import {
+  formatDriveOrDirectImageUrl,
+  DEFAULT_DKI_LOGO,
+  DEFAULT_KEMENKES_LOGO,
+} from '@/lib/print-bast-service';
 
 interface ReportsModuleProps {
   orders: MealOrder[];
@@ -21,6 +28,11 @@ interface ReportsModuleProps {
 }
 
 export function ReportsModule({ orders, patients }: ReportsModuleProps) {
+  const db = DbStore.getInstance();
+  const settings = db.getSettings();
+  const dkiLogo = formatDriveOrDirectImageUrl(settings.dkiLogoUrl) || DEFAULT_DKI_LOGO;
+  const kemenkesLogo = formatDriveOrDirectImageUrl(settings.kemenkesLogoUrl) || DEFAULT_KEMENKES_LOGO;
+
   const [activeReportTab, setActiveReportTab] = useState<
     'PATIENT_RECAP' | 'MEAL_ORDERS' | 'BILLING' | 'LEFTOVERS' | 'SOP_QUALITY'
   >('PATIENT_RECAP');
@@ -254,17 +266,45 @@ export function ReportsModule({ orders, patients }: ReportsModuleProps) {
 
       {/* Report Content Container */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
-        {/* Printable Official Header */}
-        <div className="text-center pb-3 border-b border-slate-300">
-          <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold">
-            Pemerintah Provinsi DKI Jakarta — Dinas Kesehatan
-          </p>
-          <h2 className="text-base font-bold text-slate-900 mt-0.5">
-            PUSKESMAS KEPULAUAN SERIBU SELATAN
-          </h2>
-          <p className="text-[11px] text-slate-500">
-            Instalasi Gizi & Dietetika Rawat Inap — Laporan Periode: {selectedMonth}
-          </p>
+        {/* Printable Official Header Dua Logo */}
+        <div className="pb-3 border-b-2 border-black">
+          <div className="flex items-center justify-between gap-4 pb-2 border-b-2 border-black">
+            <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+              <img
+                src={dkiLogo}
+                alt="Logo DKI"
+                className="max-h-16 max-w-full object-contain"
+                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+              />
+            </div>
+            <div className="text-center flex-1 space-y-0.5">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-900">
+                PEMERINTAH PROVINSI DAERAH KHUSUS IBUKOTA JAKARTA
+              </p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-900">
+                DINAS KESEHATAN KABUPATEN ADMINISTRASI KEPULAUAN SERIBU
+              </p>
+              <h2 className="text-base font-extrabold uppercase tracking-wider text-black">
+                PUSKESMAS KEPULAUAN SERIBU SELATAN
+              </h2>
+              <p className="text-[10px] text-slate-600">
+                Jl. Dermaga Pelabuhan Utama No. 4, Pulau Tidung, Kepulauan Seribu · Telp/WA: (021) 645-8901
+              </p>
+            </div>
+            <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+              <img
+                src={kemenkesLogo}
+                alt="Logo Kemenkes"
+                className="max-h-16 max-w-full object-contain"
+                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+              />
+            </div>
+          </div>
+          <div className="text-center pt-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-900">
+              Instalasi Gizi &amp; Dietetika Rawat Inap — Laporan Rekapitulasi Periode: {selectedMonth}
+            </p>
+          </div>
         </div>
 
         {/* TAB 1: Rekap Pasien Rawat Inap */}

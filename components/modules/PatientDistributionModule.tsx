@@ -21,7 +21,14 @@ import {
   Printer,
   Tag,
   Check,
+  ExternalLink,
 } from 'lucide-react';
+import {
+  printPatientDeliveryInNewTab,
+  formatDriveOrDirectImageUrl,
+  DEFAULT_DKI_LOGO,
+  DEFAULT_KEMENKES_LOGO,
+} from '@/lib/print-bast-service';
 
 interface PatientDistributionModuleProps {
   orders: MealOrder[];
@@ -32,6 +39,8 @@ export function PatientDistributionModule({ orders, onOrderUpdated }: PatientDis
   const db = DbStore.getInstance();
   const currentUser = db.getCurrentUser();
   const settings = db.getSettings();
+  const dkiLogo = formatDriveOrDirectImageUrl(settings.dkiLogoUrl) || DEFAULT_DKI_LOGO;
+  const kemenkesLogo = formatDriveOrDirectImageUrl(settings.kemenkesLogoUrl) || DEFAULT_KEMENKES_LOGO;
 
   const [selectedOrder, setSelectedOrder] = useState<MealOrder | null>(null);
   const [orderForEtiket, setOrderForEtiket] = useState<MealOrder | null>(null);
@@ -516,26 +525,35 @@ export function PatientDistributionModule({ orders, onOrderUpdated }: PatientDis
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-6 text-xs text-slate-900 animate-in fade-in-50">
             {/* Top Bar for Screen */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 no-print">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 no-print">
               <div className="flex items-center gap-2">
                 <Printer className="w-5 h-5 text-purple-700" />
                 <h3 className="font-bold text-sm text-slate-900">
                   Pratinjau Cetak Bukti Penyerahan Pasien (BPM-GIZI)
                 </h3>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => printPatientDeliveryInNewTab(orderForPrintPatientReceipt, settings)}
+                  className="px-3.5 py-1.5 bg-purple-800 hover:bg-purple-900 text-white font-bold rounded-lg shadow-sm flex items-center gap-1.5 text-xs transition-colors"
+                  title="Buka dokumen di tab baru dengan tombol unduh dan cetak PDF"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Buka di Tab Baru (PDF &amp; Unduh)</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-lg shadow-sm flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-lg shadow-sm flex items-center gap-1.5 text-xs transition-colors"
                 >
-                  <Printer className="w-4 h-4" />
+                  <Printer className="w-3.5 h-3.5" />
                   <span>Cetak / Simpan PDF</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setOrderForPrintPatientReceipt(null)}
-                  className="px-3 py-2 border border-slate-200 hover:bg-slate-100 text-slate-700 font-medium rounded-lg"
+                  className="px-3 py-1.5 border border-slate-200 hover:bg-slate-100 text-slate-700 font-medium rounded-lg text-xs"
                 >
                   Tutup
                 </button>
@@ -544,23 +562,41 @@ export function PatientDistributionModule({ orders, onOrderUpdated }: PatientDis
 
             {/* Official Document Sheet */}
             <div className="border border-slate-300 p-6 sm:p-8 rounded-xl space-y-5 bg-white text-black font-sans leading-relaxed">
-              {/* Kop Surat Puskesmas Kepulauan Seribu Selatan */}
-              <div className="text-center border-b-2 border-black pb-3 space-y-0.5">
-                <p className="text-xs font-bold uppercase tracking-wide">
-                  PEMERINTAH PROVINSI DAERAH KHUSUS IBUKOTA JAKARTA
-                </p>
-                <p className="text-xs font-bold uppercase tracking-wide">
-                  DINAS KESEHATAN KABUPATEN ADMINISTRASI KEPULAUAN SERIBU
-                </p>
-                <h1 className="text-base font-extrabold uppercase tracking-wider text-black">
-                  PUSKESMAS KEPULAUAN SERIBU SELATAN
-                </h1>
-                <p className="text-[10px] text-slate-600">
-                  Jl. Dermaga Utama No. 04, Kelurahan Pulau Tidung, Kepulauan Seribu Selatan · Telp/WA: (021) 6928-112
-                </p>
-                <p className="text-[9px] font-mono text-slate-500">
-                  Instalasi Pelayanan Gizi &amp; Rawat Inap Puskesmas
-                </p>
+              {/* Kop Surat Resmi Dua Logo: DKI Jakarta & Kemenkes */}
+              <div className="flex items-center justify-between gap-4 border-b-2 border-black pb-3">
+                <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+                  <img
+                    src={dkiLogo}
+                    alt="Logo Pemprov DKI Jakarta"
+                    className="max-h-16 max-w-full object-contain"
+                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                  />
+                </div>
+                <div className="text-center flex-1 space-y-0.5">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-900">
+                    PEMERINTAH PROVINSI DAERAH KHUSUS IBUKOTA JAKARTA
+                  </p>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-900">
+                    DINAS KESEHATAN KABUPATEN ADMINISTRASI KEPULAUAN SERIBU
+                  </p>
+                  <h1 className="text-base font-extrabold uppercase tracking-wider text-black">
+                    PUSKESMAS KEPULAUAN SERIBU SELATAN
+                  </h1>
+                  <p className="text-[10px] text-slate-600">
+                    Jl. Dermaga Pelabuhan Utama No. 4, Pulau Tidung, Kepulauan Seribu · Telp/WA: (021) 645-8901
+                  </p>
+                  <p className="text-[9px] font-mono text-purple-800 font-semibold uppercase">
+                    Instalasi Pelayanan Gizi &amp; Rawat Inap Puskesmas
+                  </p>
+                </div>
+                <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+                  <img
+                    src={kemenkesLogo}
+                    alt="Logo Kementerian Kesehatan"
+                    className="max-h-16 max-w-full object-contain"
+                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                  />
+                </div>
               </div>
 
               {/* Judul Dokumen */}

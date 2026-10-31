@@ -227,10 +227,10 @@ export function PatientsModule({ patients, onPatientUpdated }: PatientsModulePro
             className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg text-slate-700 bg-white w-full sm:w-auto"
           >
             <option value="ALL">Semua Ruangan</option>
-            <option value="Ruang Flamboyan">Ruang Flamboyan</option>
-            <option value="Ruang Teratai">Ruang Teratai</option>
-            <option value="Ruang Dahlia">Ruang Dahlia</option>
-            <option value="Ruang Bougenville">Ruang Bougenville</option>
+            <option value="Ruang Rawat Inap Lt. 1">Ruang Rawat Inap Lt. 1</option>
+            <option value="Ruang Rawat Inap Lt. 2 Laki-laki">Ruang Rawat Inap Lt. 2 Laki-laki</option>
+            <option value="Ruang Rawat Inap Lt. 2 Perempuan">Ruang Rawat Inap Lt. 2 Perempuan</option>
+            <option value="Ruang Rawat Inap Lt. 2 Anak-anak">Ruang Rawat Inap Lt. 2 Anak-anak</option>
           </select>
         </div>
       </div>

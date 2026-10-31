@@ -122,18 +122,65 @@ export class DbStore {
         const users = storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS;
         const currentUser = storedCurrentUser ? JSON.parse(storedCurrentUser) : INITIAL_USERS[3];
         const parsedSettings = storedSettings ? JSON.parse(storedSettings) : this.state.settings;
+        let loadedRooms = storedRooms ? JSON.parse(storedRooms) : INITIAL_ROOMS;
+
+        // Auto-migrate to new 4 ward rooms if cached rooms still contain legacy names
+        const hasNewRooms = Array.isArray(loadedRooms) && loadedRooms.some((r: any) => r?.room?.includes('Lt. 1') || r?.room?.includes('Lt. 2'));
+        if (!hasNewRooms || !loadedRooms || loadedRooms.length === 0) {
+          loadedRooms = INITIAL_ROOMS;
+          localStorage.setItem(`${STORAGE_KEY_PREFIX}rooms`, JSON.stringify(INITIAL_ROOMS));
+        }
+
+        let loadedPatients = storedPatients ? JSON.parse(storedPatients) : INITIAL_PATIENTS;
+        // Migrate any patient with legacy room names
+        if (Array.isArray(loadedPatients)) {
+          loadedPatients = loadedPatients.map((p: Patient) => {
+            if (p.room === 'Ruang Teratai') {
+              return { ...p, room: p.gender === 'L' ? 'Ruang Rawat Inap Lt. 2 Laki-laki' : 'Ruang Rawat Inap Lt. 2 Perempuan' };
+            }
+            if (p.room === 'Ruang Dahlia') {
+              return { ...p, room: 'Ruang Rawat Inap Lt. 2 Anak-anak' };
+            }
+            if (p.room === 'Ruang Flamboyan' || p.room === 'Ruang Bougenville') {
+              return { ...p, room: 'Ruang Rawat Inap Lt. 1' };
+            }
+            return p;
+          });
+        }
+
+        let loadedOrders = storedOrders ? JSON.parse(storedOrders) : INITIAL_MEAL_ORDERS;
+        if (Array.isArray(loadedOrders)) {
+          loadedOrders = loadedOrders.map((o: MealOrder) => {
+            if (o.room === 'Ruang Teratai') {
+              return { ...o, room: 'Ruang Rawat Inap Lt. 2 Laki-laki' };
+            }
+            if (o.room === 'Ruang Dahlia') {
+              return { ...o, room: 'Ruang Rawat Inap Lt. 2 Anak-anak' };
+            }
+            if (o.room === 'Ruang Flamboyan' || o.room === 'Ruang Bougenville') {
+              return { ...o, room: 'Ruang Rawat Inap Lt. 1' };
+            }
+            return o;
+          });
+        }
 
         this.state = {
           users,
           currentUser,
-          patients: storedPatients ? JSON.parse(storedPatients) : INITIAL_PATIENTS,
-          rooms: storedRooms ? JSON.parse(storedRooms) : INITIAL_ROOMS,
+          patients: loadedPatients,
+          rooms: loadedRooms,
           dietTypes: storedDietTypes ? JSON.parse(storedDietTypes) : INITIAL_DIET_TYPES,
           menus: storedMenus ? JSON.parse(storedMenus) : INITIAL_MENUS,
           providers: storedProviders ? JSON.parse(storedProviders) : INITIAL_PROVIDERS,
-          orders: storedOrders ? JSON.parse(storedOrders) : INITIAL_MEAL_ORDERS,
+          orders: loadedOrders,
           auditLogs: storedAuditLogs ? JSON.parse(storedAuditLogs) : INITIAL_AUDIT_LOGS,
-          settings: { ...this.state.settings, ...parsedSettings },
+          settings: {
+            ...INITIAL_APP_SETTINGS,
+            ...this.state.settings,
+            ...parsedSettings,
+            dkiLogoUrl: parsedSettings?.dkiLogoUrl || this.state.settings?.dkiLogoUrl || INITIAL_APP_SETTINGS.dkiLogoUrl,
+            kemenkesLogoUrl: parsedSettings?.kemenkesLogoUrl || this.state.settings?.kemenkesLogoUrl || INITIAL_APP_SETTINGS.kemenkesLogoUrl,
+          },
         };
         this.notify();
       }

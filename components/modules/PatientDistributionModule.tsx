@@ -240,14 +240,25 @@ export function PatientDistributionModule({ orders, onOrderUpdated }: PatientDis
                     <span>Etiket</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setOrderForPrintPatientReceipt(order)}
-                    className="px-3.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 rounded-lg text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 self-start sm:self-auto"
-                  >
-                    <Printer className="w-3.5 h-3.5 text-purple-700" />
-                    <span>Cetak Bukti Penyerahan (BPM PDF)</span>
-                  </button>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => printPatientDeliveryInNewTab(order, settings)}
+                      className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5"
+                      title="Buka dokumen di tab baru dengan tombol unduh dan cetak PDF"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Cetak PDF (Tab Baru)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOrderForPrintPatientReceipt(order)}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Pratinjau Pop-up</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -523,9 +534,9 @@ export function PatientDistributionModule({ orders, onOrderUpdated }: PatientDis
       {/* Modal: Cetak Bukti Penyerahan Makanan ke Pasien (BPM-GIZI PDF) */}
       {orderForPrintPatientReceipt && (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-6 text-xs text-slate-900 animate-in fade-in-50">
-            {/* Top Bar for Screen */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 no-print">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-4 sm:p-6 shadow-2xl my-auto max-h-[90vh] flex flex-col text-xs text-slate-900 animate-in fade-in-50">
+            {/* Top Bar for Screen (Sticky, Non-scrollable) */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 shrink-0 no-print">
               <div className="flex items-center gap-2">
                 <Printer className="w-5 h-5 text-purple-700" />
                 <h3 className="font-bold text-sm text-slate-900">
@@ -560,8 +571,9 @@ export function PatientDistributionModule({ orders, onOrderUpdated }: PatientDis
               </div>
             </div>
 
-            {/* Official Document Sheet */}
-            <div className="border border-slate-300 p-6 sm:p-8 rounded-xl space-y-5 bg-white text-black font-sans leading-relaxed">
+            {/* Official Document Sheet (Scrollable Container) */}
+            <div className="overflow-y-auto pr-1.5 mt-4 space-y-5">
+              <div className="border border-slate-300 p-6 sm:p-8 rounded-xl space-y-5 bg-white text-black font-sans leading-relaxed">
               {/* Kop Surat Resmi Dua Logo: DKI Jakarta & Kemenkes */}
               <div className="flex items-center justify-between gap-4 border-b-2 border-black pb-3">
                 <div className="w-16 h-16 shrink-0 flex items-center justify-center">
@@ -750,6 +762,7 @@ export function PatientDistributionModule({ orders, onOrderUpdated }: PatientDis
                 <span>No. Order: {orderForPrintPatientReceipt.orderNumber}</span>
                 <span>Puskesmas Kepulauan Seribu Selatan</span>
               </div>
+            </div>
             </div>
           </div>
         </div>

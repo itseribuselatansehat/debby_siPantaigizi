@@ -140,6 +140,8 @@ export function ProviderModule({ orders, onOrderUpdated }: ProviderModuleProps) 
               const isInPreparation = ['PROVIDER_ACCEPTED', 'FOOD_PREPARATION', 'READY_TO_DELIVER'].includes(order.status);
               const isInDelivery = order.status === 'IN_DELIVERY';
               const isReceived = order.status === 'RECEIVED_BY_WAITER';
+              const patient = db.getPatientById(order.patientId);
+              const isPatientDischarged = patient?.status === 'DISCHARGED' || order.status === 'CANCELLED';
 
               return (
                 <div key={order.id} className="p-4 hover:bg-slate-50/70 transition-colors space-y-3">
@@ -218,37 +220,44 @@ export function ProviderModule({ orders, onOrderUpdated }: ProviderModuleProps) 
                       )}
 
                       {isInPreparation && (
-                        <div className="flex items-center gap-1.5">
-                          {/* Option to send Sarapan */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenShipModal(order, 'SARAPAN')}
-                            className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-semibold inline-flex items-center gap-1 shadow-sm"
-                          >
-                            <Sun className="w-3 h-3" />
-                            <span>Kirim Sarapan Pagi</span>
-                          </button>
+                        isPatientDischarged ? (
+                          <div className="flex items-center gap-2 p-2 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-[11px] font-semibold">
+                            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                            <span>Pasien Sudah Pulang: Pengiriman makanan dihentikan oleh Ahli Gizi.</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {/* Option to send Sarapan */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenShipModal(order, 'SARAPAN')}
+                              className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-semibold inline-flex items-center gap-1 shadow-sm"
+                            >
+                              <Sun className="w-3 h-3" />
+                              <span>Kirim Sarapan Pagi</span>
+                            </button>
 
-                          {/* Option to send Siang */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenShipModal(order, 'SIANG')}
-                            className="px-2.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded text-[11px] font-semibold inline-flex items-center gap-1 shadow-sm"
-                          >
-                            <Sunset className="w-3 h-3" />
-                            <span>Kirim Makan Siang</span>
-                          </button>
+                            {/* Option to send Siang */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenShipModal(order, 'SIANG')}
+                              className="px-2.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded text-[11px] font-semibold inline-flex items-center gap-1 shadow-sm"
+                            >
+                              <Sunset className="w-3 h-3" />
+                              <span>Kirim Makan Siang</span>
+                            </button>
 
-                          {/* Option to send Malam */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenShipModal(order, 'MALAM')}
-                            className="px-2.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded text-[11px] font-semibold inline-flex items-center gap-1 shadow-sm"
-                          >
-                            <Moon className="w-3 h-3" />
-                            <span>Kirim Makan Malam</span>
-                          </button>
-                        </div>
+                            {/* Option to send Malam */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenShipModal(order, 'MALAM')}
+                              className="px-2.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded text-[11px] font-semibold inline-flex items-center gap-1 shadow-sm"
+                            >
+                              <Moon className="w-3 h-3" />
+                              <span>Kirim Makan Malam</span>
+                            </button>
+                          </div>
+                        )
                       )}
 
                       {isInDelivery && (

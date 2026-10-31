@@ -186,9 +186,9 @@ export function LandingPage({ onLoginAsUser }: LandingPageProps) {
           </div>
 
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight max-w-4xl mx-auto">
-            Monitoring Distribusi Nutrisi & Tagihan Gizi{' '}
+            Monitoring Distribusi Nutrisi &amp; Tagihan Gizi{' '}
             <span className="text-teal-300 underline decoration-teal-400/50 decoration-wavy">
-              Wilayah Pesisir
+              Puskesmas Kepulauan Seribu Selatan
             </span>
           </h1>
 

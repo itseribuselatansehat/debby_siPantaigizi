@@ -20,7 +20,9 @@ import {
   formatDriveOrDirectImageUrl,
   DEFAULT_DKI_LOGO,
   DEFAULT_KEMENKES_LOGO,
+  printPatientMealHistoryInNewTab,
 } from '@/lib/print-bast-service';
+import { ExternalLink } from 'lucide-react';
 
 interface ReportsModuleProps {
   orders: MealOrder[];
@@ -84,11 +86,47 @@ export function ReportsModule({ orders, patients }: ReportsModuleProps) {
     let filename = `Laporan_${activeReportTab}_${selectedMonth}.csv`;
 
     if (activeReportTab === 'PATIENT_RECAP') {
-      headers = ['No', 'No. RM', 'Nama Pasien', 'Ruang Rawat', 'Bed', 'Diagnosis Medis', 'Jumlah Order', 'Total Porsi Disajikan'];
+      headers = [
+        'No',
+        'No. RM',
+        'Nama Pasien',
+        'Ruang Rawat',
+        'Bed',
+        'Status Rawat',
+        'Frekuensi Sarapan',
+        'Frekuensi Siang',
+        'Frekuensi Malam',
+        'Total Kali Makan',
+        'Total Tagihan (Rp)',
+      ];
       rows = patients.map((p, idx) => {
-        const patientOrders = filteredOrders.filter((o) => o.patientId === p.id);
-        const portions = patientOrders.reduce((s, o) => s + (o.billedPortionCount || o.portionCount), 0);
-        return [idx + 1, `"${p.mrn}"`, `"${p.name}"`, `"${p.room}"`, `"${p.bed}"`, `"${p.clinicalDiagnosis}"`, patientOrders.length, portions];
+        const pOrders = filteredOrders.filter(
+          (o) => o.patientId === p.id && o.status !== 'CANCELLED' && o.status !== 'REJECTED'
+        );
+        let sarapan = 0;
+        let siang = 0;
+        let malam = 0;
+        let totalCost = 0;
+        pOrders.forEach((o) => {
+          if (o.schedule === 'SARAPAN') sarapan += (o.portionCount || 1);
+          else if (o.schedule === 'SIANG') siang += (o.portionCount || 1);
+          else if (o.schedule === 'MALAM') malam += (o.portionCount || 1);
+          totalCost += (o.finalBilledAmount || o.totalEstimatedPrice || 0);
+        });
+        const totalPortions = sarapan + siang + malam;
+        return [
+          idx + 1,
+          `"${p.mrn}"`,
+          `"${p.name}"`,
+          `"${p.room}"`,
+          `"${p.bed}"`,
+          `"${p.status === 'DISCHARGED' ? 'SUDAH PULANG' : 'AKTIF RAWAT'}"`,
+          sarapan,
+          siang,
+          malam,
+          totalPortions,
+          totalCost,
+        ];
       });
     } else if (activeReportTab === 'MEAL_ORDERS') {
       headers = ['Tgl', 'No. Order', 'No. RM', 'Pasien', 'Ruang', 'Jadwal', 'Diet', 'Menu', 'Porsi', 'Pemesan', 'Status'];
@@ -331,27 +369,72 @@ export function ReportsModule({ orders, patients }: ReportsModuleProps) {
                   <tr className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-700">
                     <th className="py-2.5 px-3">No. RM</th>
                     <th className="py-2.5 px-3">Nama Pasien</th>
-                    <th className="py-2.5 px-3">Ruang / Kamar</th>
-                    <th className="py-2.5 px-3">Diagnosis Medis</th>
-                    <th className="py-2.5 px-3 text-center">Tgl Masuk</th>
-                    <th className="py-2.5 px-3 text-right">Jumlah Order</th>
-                    <th className="py-2.5 px-3 text-right">Porsi Tersaji</th>
+                    <th className="py-2.5 px-3">Ruangan &amp; Bed</th>
+                    <th className="py-2.5 px-3">Status Rawat</th>
+                    <th className="py-2.5 px-3 text-center text-amber-900 bg-amber-50/50">Sarapan (25K)</th>
+                    <th className="py-2.5 px-3 text-center text-teal-900 bg-teal-50/50">Siang (47K)</th>
+                    <th className="py-2.5 px-3 text-center text-indigo-900 bg-indigo-50/50">Malam (47K)</th>
+                    <th className="py-2.5 px-3 text-center">Total Makan</th>
+                    <th className="py-2.5 px-3 text-right">Total Tagihan</th>
+                    <th className="py-2.5 px-3 text-center no-print">Aksi Laporan</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {patients.map((p) => {
-                    const patientOrders = filteredOrders.filter((o) => o.patientId === p.id);
-                    const portions = patientOrders.reduce((s, o) => s + (o.billedPortionCount || o.portionCount), 0);
+                    const patientOrders = filteredOrders.filter(
+                      (o) => o.patientId === p.id && o.status !== 'CANCELLED' && o.status !== 'REJECTED'
+                    );
+                    let sarapan = 0;
+                    let siang = 0;
+                    let malam = 0;
+                    let totalCost = 0;
+                    patientOrders.forEach((o) => {
+                      if (o.schedule === 'SARAPAN') sarapan += (o.portionCount || 1);
+                      else if (o.schedule === 'SIANG') siang += (o.portionCount || 1);
+                      else if (o.schedule === 'MALAM') malam += (o.portionCount || 1);
+                      totalCost += (o.finalBilledAmount || o.totalEstimatedPrice || 0);
+                    });
+                    const totalPortions = sarapan + siang + malam;
+                    const isDischarged = p.status === 'DISCHARGED';
 
                     return (
                       <tr key={p.id} className="hover:bg-slate-50">
                         <td className="py-2 px-3 font-mono font-bold text-teal-900">{p.mrn}</td>
                         <td className="py-2 px-3 font-semibold text-slate-900">{p.name}</td>
                         <td className="py-2 px-3 text-slate-700">{p.room} ({p.bed})</td>
-                        <td className="py-2 px-3 text-slate-600">{p.clinicalDiagnosis}</td>
-                        <td className="py-2 px-3 text-center font-mono text-slate-600">{formatJakartaDate(p.admissionDate)}</td>
-                        <td className="py-2 px-3 text-right font-mono font-semibold">{patientOrders.length}</td>
-                        <td className="py-2 px-3 text-right font-mono font-bold text-emerald-800">{portions}</td>
+                        <td className="py-2 px-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            isDischarged ? 'bg-slate-100 text-slate-700' : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                            {isDischarged ? 'SUDAH PULANG' : 'AKTIF RAWAT'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-center font-bold text-amber-900 bg-amber-50/30 font-mono">
+                          {sarapan}x
+                        </td>
+                        <td className="py-2 px-3 text-center font-bold text-teal-900 bg-teal-50/30 font-mono">
+                          {siang}x
+                        </td>
+                        <td className="py-2 px-3 text-center font-bold text-indigo-900 bg-indigo-50/30 font-mono">
+                          {malam}x
+                        </td>
+                        <td className="py-2 px-3 text-center font-extrabold text-slate-900 font-mono">
+                          {totalPortions} Porsi
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono font-bold text-emerald-800">
+                          Rp {formatRupiah(totalCost)}
+                        </td>
+                        <td className="py-2 px-3 text-center no-print">
+                          <button
+                            type="button"
+                            onClick={() => printPatientMealHistoryInNewTab(p, orders, settings)}
+                            className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 rounded font-semibold text-[10px] inline-flex items-center gap-1 transition"
+                            title="Buka laporan riwayat makan pasien ini di tab baru (PDF & Unduh)"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Cetak PDF</span>
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}

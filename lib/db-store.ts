@@ -48,6 +48,11 @@ export class DbStore {
   private static instance: DbStore;
   private state: DatabaseState;
   private listeners: Set<() => void> = new Set();
+  private syncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoSyncIntervalTimer: ReturnType<typeof setInterval> | null = null;
+  private isAutoSyncActive: boolean = true;
+  private isSyncingWithGas: boolean = false;
+  private lastAutoSyncStatus: { success: boolean; message: string; timestamp: string } | null = null;
 
   private constructor() {
     this.state = this.loadInitialState();
@@ -184,6 +189,8 @@ export class DbStore {
         };
         this.notify();
       }
+      // Start 3-second auto-sync loop across the application
+      this.startAutoSyncLoop(3000);
     } catch {
       // keep baseline state if parsing fails
     }
@@ -206,6 +213,99 @@ export class DbStore {
       console.warn('Could not save to localStorage:', e);
     }
     this.notify();
+    // Auto-sync whenever data is added or updated (patient, order, qc, handover, leftover)
+    this.triggerBackgroundGasSync();
+  }
+
+  // --- Auto-Sync to Google Apps Script & Google Sheets ---
+  public isAutoSyncRunning(): boolean {
+    return this.isAutoSyncActive;
+  }
+
+  public setAutoSyncRunning(active: boolean) {
+    this.isAutoSyncActive = active;
+    if (active) {
+      this.startAutoSyncLoop(3000);
+      this.triggerBackgroundGasSync(true);
+    }
+    this.notify();
+  }
+
+  public getAutoSyncStatus() {
+    return this.lastAutoSyncStatus;
+  }
+
+  public startAutoSyncLoop(intervalMs = 3000) {
+    if (typeof window === 'undefined') return;
+    if (this.autoSyncIntervalTimer) {
+      clearInterval(this.autoSyncIntervalTimer);
+      this.autoSyncIntervalTimer = null;
+    }
+
+    this.autoSyncIntervalTimer = setInterval(() => {
+      if (this.isAutoSyncActive && this.state.settings.gasWebAppUrl && !this.isSyncingWithGas) {
+        this.triggerBackgroundGasSync(false);
+      }
+    }, intervalMs);
+  }
+
+  public triggerBackgroundGasSync(immediate = false) {
+    if (typeof window === 'undefined') return;
+    const gasUrl = this.state.settings.gasWebAppUrl;
+    if (!gasUrl || typeof gasUrl !== 'string' || !gasUrl.startsWith('https://script.google.com/macros/s/')) {
+      return;
+    }
+
+    if (this.syncDebounceTimer) {
+      clearTimeout(this.syncDebounceTimer);
+      this.syncDebounceTimer = null;
+    }
+
+    const runSync = async () => {
+      if (this.isSyncingWithGas) return;
+      this.isSyncingWithGas = true;
+      try {
+        const payload = {
+          orders: this.state.orders,
+          auditLogs: this.state.auditLogs,
+          patients: this.state.patients,
+        };
+        const response = await fetch('/api/gas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            gasWebAppUrl: gasUrl.trim(),
+            action: 'syncAll',
+            payload,
+          }),
+        });
+
+        if (response.ok) {
+          const nowIso = new Date().toISOString();
+          this.state.settings.lastGasSyncAt = nowIso;
+          this.lastAutoSyncStatus = {
+            success: true,
+            message: 'Tersinkronisasi otomatis ke Google Spreadsheet',
+            timestamp: nowIso,
+          };
+          this.notify();
+        }
+      } catch (err: any) {
+        this.lastAutoSyncStatus = {
+          success: false,
+          message: err?.message || 'Gagal sinkronisasi background ke Google Sheets',
+          timestamp: new Date().toISOString(),
+        };
+      } finally {
+        this.isSyncingWithGas = false;
+      }
+    };
+
+    if (immediate) {
+      runSync();
+    } else {
+      this.syncDebounceTimer = setTimeout(runSync, 400);
+    }
   }
 
   public subscribe(listener: () => void): () => void {
@@ -267,6 +367,52 @@ export class DbStore {
 
   public getPatientById(id: string): Patient | undefined {
     return this.state.patients.find((p) => p.id === id);
+  }
+
+  public getOrdersForPatient(patientId: string): MealOrder[] {
+    return this.state.orders.filter((o) => o.patientId === patientId);
+  }
+
+  public getPatientMealFrequencySummary(patientId: string) {
+    const orders = this.getOrdersForPatient(patientId).filter(
+      (o) => o.status !== 'CANCELLED' && o.status !== 'REJECTED'
+    );
+    let sarapanCount = 0;
+    let siangCount = 0;
+    let malamCount = 0;
+    let servedCount = 0;
+    let totalCost = 0;
+    let comstockSum = 0;
+    let comstockEvaluatedCount = 0;
+
+    orders.forEach((o) => {
+      const isServed = ['DELIVERED_TO_PATIENT', 'CONSUMPTION_RECORDED', 'COMPLETED'].includes(o.status);
+      if (isServed) servedCount += (o.billedPortionCount || o.portionCount || 1);
+
+      if (o.schedule === 'SARAPAN') sarapanCount += (o.portionCount || 1);
+      else if (o.schedule === 'SIANG') siangCount += (o.portionCount || 1);
+      else if (o.schedule === 'MALAM') malamCount += (o.portionCount || 1);
+
+      totalCost += (o.finalBilledAmount || o.totalEstimatedPrice || 0);
+
+      if (o.leftoverAssessment && o.leftoverAssessment.consumptionPercentage !== undefined) {
+        comstockSum += o.leftoverAssessment.consumptionPercentage;
+        comstockEvaluatedCount++;
+      }
+    });
+
+    const avgConsumptionPercentage = comstockEvaluatedCount > 0 ? Math.round(comstockSum / comstockEvaluatedCount) : 100;
+
+    return {
+      totalOrders: orders.length,
+      servedCount,
+      sarapanCount,
+      siangCount,
+      malamCount,
+      totalCost,
+      avgConsumptionPercentage,
+      orders,
+    };
   }
 
   public addPatient(patientData: Omit<Patient, 'id'>): Patient {

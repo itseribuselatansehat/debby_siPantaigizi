@@ -9,31 +9,33 @@
   Require all granted
 </IfModule>
 
-# Matikan directory browsing bawaan server
-Options -Indexes
+# Matikan directory browsing bawaan server namun tetapkan index default
+Options -Indexes +FollowSymLinks
+
+# 2. Konfigurasi CloudLinux Passenger (Hostinger NodeJS Selector)
+# Jika Hostinger hPanel Node.js App diaktifkan, Passenger mengeksekusi server.js langsung
+<IfModule mod_passenger.c>
+  PassengerAppType node
+  PassengerStartupFile server.js
+  PassengerEnabled on
+</IfModule>
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
 
-  # 2. Lewatkan HANYA file fisik statis yang benar-benar ada di disk (seperti gambar, favicon, manifest)
-  # PENTING: JANGAN gunakan RewriteCond %{REQUEST_FILENAME} -d karena rute root '/' adalah direktori!
-  # Jika -d digunakan, LiteSpeed/Apache akan mencegat rute '/' dan memunculkan layar 403 Forbidden!
+  # 3. Lewatkan HANYA file fisik statis yang benar-benar ada di disk (seperti gambar, favicon, manifest)
   RewriteCond %{REQUEST_FILENAME} -f
   RewriteRule ^ - [L]
 
-  # 3. Teruskan semua rute halaman & API ke aplikasi Node.js Next.js (port 3000)
+  # 4. Teruskan semua rute halaman & API ke aplikasi Node.js Next.js (port 3000 jika mod_proxy tersedia)
   <IfModule mod_proxy.c>
     RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
   </IfModule>
 </IfModule>
 
-# 4. Header forwarding untuk SSL / HTTPS di Hostinger
+# 5. Header forwarding untuk SSL / HTTPS di Hostinger
 <IfModule mod_headers.c>
   RequestHeader set X-Forwarded-Proto "https" env=HTTPS
   RequestHeader set X-Forwarded-Port "443" env=HTTPS
 </IfModule>
-
-# 5. Konfigurasi Alternatif CloudLinux / Phusion Passenger (Jika Hostinger Node.js Selector Digunakan)
-# Jika Hostinger hPanel Anda menggunakan CloudLinux NodeJS Selector,
-# pastikan Application Startup File di hPanel diatur ke: server.js

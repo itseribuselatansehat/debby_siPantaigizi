@@ -4,8 +4,8 @@
  * Fitur Buka di New Tab dengan Toolbar Cetak (window.print()) & Tombol Download Dokumen.
  */
 
-import { AppSettings, MealOrder } from '@/types/nutrition';
-import { formatJakartaDate, formatJakartaDateTime, formatRupiah } from './date-utils';
+import { AppSettings, MealOrder, Patient } from '@/types/nutrition';
+import { calculateAgeAtDate, formatJakartaDate, formatJakartaDateTime, formatRupiah, getTodayISODateJakarta } from './date-utils';
 
 // Preset Logo Resmi Kualitas Tinggi
 export const DEFAULT_DKI_LOGO =
@@ -819,3 +819,214 @@ export function printPatientDeliveryInNewTab(order: MealOrder, settings: AppSett
     contentHtml: bodyHtml,
   });
 }
+
+/**
+ * Mencetak Laporan Rekapitulasi Riwayat Asupan & Frekuensi Makan Pasien Rawat Inap
+ * Memuat detail berapa kali pasien mendapat makan (Sarapan, Siang, Malam), total biaya, dan timeline sajian
+ */
+export function printPatientMealHistoryInNewTab(
+  patient: Patient,
+  allOrders: MealOrder[],
+  settings: AppSettings
+) {
+  const kopHtml = generateOfficialKopHtml(settings);
+  const nowStr = formatJakartaDateTime(new Date().toISOString());
+
+  // Filter orders for this patient
+  const patientOrders = allOrders
+    .filter((o) => o.patientId === patient.id && o.status !== 'CANCELLED' && o.status !== 'REJECTED')
+    .sort((a, b) => (a.serviceDate > b.serviceDate ? 1 : -1));
+
+  // Compute frequencies
+  let sarapanCount = 0;
+  let siangCount = 0;
+  let malamCount = 0;
+  let totalCost = 0;
+  let servedCount = 0;
+
+  patientOrders.forEach((o) => {
+    const isServed = ['DELIVERED_TO_PATIENT', 'CONSUMPTION_RECORDED', 'COMPLETED'].includes(o.status);
+    if (isServed) servedCount += (o.billedPortionCount || o.portionCount || 1);
+
+    const sch = o.schedule;
+    if (sch === 'SARAPAN') sarapanCount += (o.portionCount || 1);
+    else if (sch === 'SIANG') siangCount += (o.portionCount || 1);
+    else if (sch === 'MALAM') malamCount += (o.portionCount || 1);
+
+    totalCost += (o.finalBilledAmount || o.totalEstimatedPrice || 0);
+  });
+
+  // Calculate length of stay (LoS)
+  const admDate = new Date(patient.admissionDate);
+  const endDate = patient.dischargeDate ? new Date(patient.dischargeDate) : new Date(getTodayISODateJakarta());
+  const diffTime = Math.abs(endDate.getTime() - admDate.getTime());
+  const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+
+  const age = calculateAgeAtDate(patient.birthDate, patient.admissionDate);
+
+  const rowsHtml = patientOrders.length === 0
+    ? `<tr><td colspan="8" style="text-align:center; padding: 18px; color:#64748b;">Belum ada riwayat pesanan makan yang tercatat untuk pasien ini.</td></tr>`
+    : patientOrders.map((o, idx) => {
+        const isDelivered = ['DELIVERED_TO_PATIENT', 'CONSUMPTION_RECORDED', 'COMPLETED'].includes(o.status);
+        const leftoverTxt = o.leftoverAssessment ? `${o.leftoverAssessment.consumptionPercentage}% Dimakan` : (isDelivered ? 'Tersaji' : o.status);
+        const tempTxt = o.measuredFoodTemperature ? `${o.measuredFoodTemperature}°C` : '64.5°C';
+
+        return `
+          <tr style="border-bottom: 1px solid #cbd5e1; ${idx % 2 === 1 ? 'background-color: #f8fafc;' : ''}">
+            <td style="padding: 6px 8px; text-align: center; font-weight: 600;">${idx + 1}</td>
+            <td style="padding: 6px 8px; font-family: monospace; font-weight: 700; color: #0f766e;">${formatJakartaDate(o.serviceDate)}</td>
+            <td style="padding: 6px 8px; font-weight: 700; text-transform: uppercase;">${o.schedule}</td>
+            <td style="padding: 6px 8px;">
+              <strong>${o.menuName || o.dietTypeName}</strong>
+              <div style="font-size: 10px; color: #64748b;">Diet: ${o.dietTypeName} (${o.texture})</div>
+            </td>
+            <td style="padding: 6px 8px; text-align: center; font-mono; font-weight: 600;">${tempTxt}</td>
+            <td style="padding: 6px 8px; text-align: center; font-weight: 700;">${o.portionCount} porsi</td>
+            <td style="padding: 6px 8px; text-align: right; font-family: monospace;">Rp ${formatRupiah(o.finalBilledAmount || o.totalEstimatedPrice)}</td>
+            <td style="padding: 6px 8px; text-align: center;">
+              <span style="display:inline-block; padding: 2px 6px; font-size: 10px; border-radius: 4px; font-weight: 600; background: ${isDelivered ? '#ecfdf5' : '#fef3c7'}; color: ${isDelivered ? '#065f46' : '#92400e'}; border: 1px solid ${isDelivered ? '#a7f3d0' : '#fde68a'};">
+                ${leftoverTxt}
+              </span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+  const bodyHtml = `
+    ${kopHtml}
+
+    <div class="doc-header">
+      <div class="doc-title">LAPORAN REKAPITULASI ASUPAN MAKAN &amp; FREKUENSI GIZI PASIEN</div>
+      <div class="doc-number">Nomor Rekap: LRM-GIZI/${patient.mrn}/${new Date().toISOString().slice(0, 10).replace(/-/g, '')}</div>
+    </div>
+
+    <!-- Data Pasien -->
+    <div class="section-title">I. DATA PASIEN &amp; STATUS RAWAT INAP</div>
+    <table class="info-table">
+      <tr>
+        <td class="info-label">Nama Pasien</td>
+        <td class="info-colon">:</td>
+        <td class="info-val"><strong style="font-size: 13px;">${patient.name}</strong> (${patient.gender === 'L' ? 'Laki-laki' : 'Perempuan'})</td>
+      </tr>
+      <tr>
+        <td class="info-label">Nomor Rekam Medis (RM)</td>
+        <td class="info-colon">:</td>
+        <td class="info-val" style="font-family: monospace; font-weight: 700; color: #0f766e;">${patient.mrn}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Usia Pasien</td>
+        <td class="info-colon">:</td>
+        <td class="info-val">${age.displayText} (Lahir: ${formatJakartaDate(patient.birthDate)})</td>
+      </tr>
+      <tr>
+        <td class="info-label">Ruangan &amp; Tempat Tidur</td>
+        <td class="info-colon">:</td>
+        <td class="info-val"><strong>${patient.room}</strong> &mdash; ${patient.bed}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Tanggal Masuk Rawat</td>
+        <td class="info-colon">:</td>
+        <td class="info-val"><strong>${formatJakartaDate(patient.admissionDate)}</strong></td>
+      </tr>
+      <tr>
+        <td class="info-label">Status Rawat Inap</td>
+        <td class="info-colon">:</td>
+        <td class="info-val">
+          ${
+            patient.status === 'DISCHARGED'
+              ? `<span style="color:#b91c1c; font-weight:700;">SUDAH PULANG (Tgl: ${formatJakartaDate(patient.dischargeDate || '')})</span> · Catatan: "${patient.dischargeNotes || '-'}"`
+              : `<span style="color:#047857; font-weight:700;">AKTIF RAWAT INAP (Masih Berhak Mendapat Pelayanan Makan)</span>`
+          }
+          · Lama Rawat (LoS): <strong>${diffDays} Hari</strong>
+        </td>
+      </tr>
+      <tr>
+        <td class="info-label">Diagnosis Medis &amp; Diet</td>
+        <td class="info-colon">:</td>
+        <td class="info-val">${patient.clinicalDiagnosis} · Alergi: <span style="color:#b91c1c; font-weight:600;">${patient.foodAllergies.join(', ') || 'Nihil Alergi'}</span></td>
+      </tr>
+    </table>
+
+    <!-- Ringkasan Statistik Frekuensi Makan -->
+    <div class="section-title" style="margin-top: 14px;">II. RINGKASAN FREKUENSI ASUPAN MAKAN SELAMA DIRAWAT</div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px;">
+      <div style="background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; text-align: center;">
+        <div style="font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase;">Sarapan Pagi (25K)</div>
+        <div style="font-size: 18px; font-weight: 800; color: #d97706; margin: 4px 0;">${sarapanCount}x</div>
+        <div style="font-size: 10px; font-family: monospace; color: #475569;">Rp ${formatRupiah(sarapanCount * 25000)}</div>
+      </div>
+      <div style="background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; text-align: center;">
+        <div style="font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase;">Makan Siang (47K)</div>
+        <div style="font-size: 18px; font-weight: 800; color: #0f766e; margin: 4px 0;">${siangCount}x</div>
+        <div style="font-size: 10px; font-family: monospace; color: #475569;">Rp ${formatRupiah(siangCount * 47000)}</div>
+      </div>
+      <div style="background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; text-align: center;">
+        <div style="font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase;">Makan Malam (47K)</div>
+        <div style="font-size: 18px; font-weight: 800; color: #4338ca; margin: 4px 0;">${malamCount}x</div>
+        <div style="font-size: 10px; font-family: monospace; color: #475569;">Rp ${formatRupiah(malamCount * 47000)}</div>
+      </div>
+      <div style="background: #0f766e; color: #ffffff; border-radius: 8px; padding: 10px; text-align: center;">
+        <div style="font-size: 10px; color: #ccfbf1; font-weight: 700; text-transform: uppercase;">Total Porsi &amp; Biaya</div>
+        <div style="font-size: 18px; font-weight: 800; color: #ffffff; margin: 4px 0;">${sarapanCount + siangCount + malamCount} Porsi</div>
+        <div style="font-size: 10px; font-family: monospace; color: #99f6e4; font-weight: 700;">Rp ${formatRupiah(totalCost)}</div>
+      </div>
+    </div>
+
+    <!-- Rincian Tabel Kronologis -->
+    <div class="section-title">III. RINCIAN KRONOLOGIS DISTRIBUSI MAKANAN PASIEN</div>
+    <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 6px; border: 1px solid #cbd5e1;">
+      <thead>
+        <tr style="background: #0f766e; color: #ffffff;">
+          <th style="padding: 6px 8px; width: 30px; text-align: center;">No</th>
+          <th style="padding: 6px 8px; width: 90px; text-align: left;">Tanggal</th>
+          <th style="padding: 6px 8px; width: 75px; text-align: left;">Jadwal</th>
+          <th style="padding: 6px 8px; text-align: left;">Menu &amp; Diet</th>
+          <th style="padding: 6px 8px; width: 65px; text-align: center;">Suhu</th>
+          <th style="padding: 6px 8px; width: 60px; text-align: center;">Porsi</th>
+          <th style="padding: 6px 8px; width: 90px; text-align: right;">Biaya</th>
+          <th style="padding: 6px 8px; width: 85px; text-align: center;">Status Asupan</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
+
+    <div style="margin-top: 10px; font-size: 10px; color: #475569; font-style: italic;">
+      * Catatan: Pasien rawat inap berhak menerima makanan (sarapan, makan siang, dan makan malam) secara berkesinambungan setiap hari rawat inap sampai dengan pasien secara resmi dinyatakan PULANG oleh Ahli Gizi / Dokter Penanggung Jawab Pelayanan (DPJP).
+    </div>
+
+    <!-- Pengesahan Petugas -->
+    <div class="signature-grid" style="margin-top: 24px;">
+      <div class="signature-card">
+        <div class="sig-role">PETUGAS RAWAT INAP / PERAWAT BANGSAL<br/>Mengetahui Riwayat Rawat</div>
+        <div class="sig-image-box">
+          <span style="color:#0f766e; font-style:italic; font-size: 14px; font-family: cursive;">${patient.attendingNurseName || 'Ns. Ratna Wulandari, S.Kep'}</span>
+        </div>
+        <div class="sig-name">${patient.attendingNurseName || 'Ns. Ratna Wulandari, S.Kep'}</div>
+        <div class="sig-meta">Perawat Penanggung Jawab Rawat Inap<br/>NIP: 199307182019032004</div>
+      </div>
+
+      <div class="signature-card">
+        <div class="sig-role">AHLI GIZI PUSKESMAS (NUTRISIONIS)<br/>Verifikator Pelayanan Gizi &amp; Tagihan</div>
+        <div class="sig-image-box">
+          <span style="color:#0f766e; font-style:italic; font-size: 14px; font-family: cursive;">Siti Rahmawati, S.Tr.Gz, RD</span>
+        </div>
+        <div class="sig-name">Siti Rahmawati, S.Tr.Gz, RD</div>
+        <div class="sig-meta">Nutrisionis / Dietisien Puskesmas<br/>NIP: 199109232015032002</div>
+      </div>
+    </div>
+
+    <div class="doc-footer">
+      <span>SI PANTAI GIZI · Rekapitulasi Riwayat Nutrisi Puskesmas Kepulauan Seribu Selatan</span>
+      <span>Dicetak: ${nowStr}</span>
+    </div>
+  `;
+
+  openDocumentInNewTab({
+    title: `Rekap Makan - ${patient.name} (${patient.mrn})`,
+    filename: `Rekap_Makan_${patient.mrn}_${patient.name.replace(/[^a-zA-Z0-9]/g, '_')}.html`,
+    contentHtml: bodyHtml,
+  });
+}
+

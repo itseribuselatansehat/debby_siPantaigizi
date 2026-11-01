@@ -84,23 +84,73 @@ export class DbStore {
     if (typeof window === 'undefined') return;
 
     try {
-      // 1. Fetch server-side global settings first so any new browser gets the GAS Web App & Sheets settings immediately!
+      // 1. Ambil database global server terlebih dahulu!
+      // Ini memastikan saat ganti browser, incognito, atau perangkat lain,
+      // seluruh data pengguna, pasien, pesanan, dan pengaturan langsung tampil identik dari database!
       try {
-        const res = await fetch('/api/settings');
+        const res = await fetch('/api/database');
         if (res.ok) {
           const json = await res.json();
-          if (json?.settings && typeof json.settings === 'object') {
-            this.state.settings = {
-              ...this.state.settings,
-              ...json.settings,
-            };
-            localStorage.setItem(`${STORAGE_KEY_PREFIX}settings`, JSON.stringify(this.state.settings));
+          if (json?.success && json?.database && typeof json.database === 'object') {
+            const db = json.database;
+            if (Array.isArray(db.users) && db.users.length > 0) {
+              this.state.users = db.users;
+            }
+            if (Array.isArray(db.patients)) {
+              this.state.patients = db.patients;
+            }
+            if (Array.isArray(db.orders)) {
+              this.state.orders = db.orders;
+            }
+            if (Array.isArray(db.rooms) && db.rooms.length > 0) {
+              this.state.rooms = db.rooms;
+            }
+            if (Array.isArray(db.menus) && db.menus.length > 0) {
+              this.state.menus = db.menus;
+            }
+            if (Array.isArray(db.dietTypes) && db.dietTypes.length > 0) {
+              this.state.dietTypes = db.dietTypes;
+            }
+            if (Array.isArray(db.providers) && db.providers.length > 0) {
+              this.state.providers = db.providers;
+            }
+            if (Array.isArray(db.auditLogs)) {
+              this.state.auditLogs = db.auditLogs;
+            }
+            if (db.settings && typeof db.settings === 'object') {
+              this.state.settings = {
+                ...INITIAL_APP_SETTINGS,
+                ...this.state.settings,
+                ...db.settings,
+              };
+            }
+
+            // Restore login user session
+            const storedCurrentUser = localStorage.getItem(`${STORAGE_KEY_PREFIX}currentUser`);
+            if (storedCurrentUser) {
+              try {
+                const parsed = JSON.parse(storedCurrentUser);
+                const match = this.state.users.find((u) => u.id === parsed.id || u.email === parsed.email);
+                if (match) this.state.currentUser = match;
+              } catch {
+                // ignore
+              }
+            } else if (this.state.users.length > 0) {
+              const defaultUser = this.state.users.find((u) => u.role === 'AHLI_GIZI') || this.state.users[0];
+              this.state.currentUser = defaultUser;
+            }
+
+            this.syncToLocalStorageOnly();
+            this.notify();
+            this.startAutoSyncLoop(3000);
+            return;
           }
         }
-      } catch {
-        // ignore offline / server fetch error
+      } catch (serverErr) {
+        console.warn('Gagal memuat database global server, beralih ke cache lokal:', serverErr);
       }
 
+      // 2. Fallback offline cache di LocalStorage
       const storedOrders = localStorage.getItem(`${STORAGE_KEY_PREFIX}orders`);
       const storedPatients = localStorage.getItem(`${STORAGE_KEY_PREFIX}patients`);
       const storedUsers = localStorage.getItem(`${STORAGE_KEY_PREFIX}users`);
@@ -125,84 +175,35 @@ export class DbStore {
         storedRooms
       ) {
         let users = storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS;
-        if (!Array.isArray(users) || users.length === 0 || !users.some((u: any) => u.role === 'DOKTER' || u.role === 'PERAWAT')) {
-          users = INITIAL_USERS;
-          localStorage.setItem(`${STORAGE_KEY_PREFIX}users`, JSON.stringify(INITIAL_USERS));
-        }
         const currentUser = storedCurrentUser ? JSON.parse(storedCurrentUser) : INITIAL_USERS[3];
         const parsedSettings = storedSettings ? JSON.parse(storedSettings) : this.state.settings;
         let loadedRooms = storedRooms ? JSON.parse(storedRooms) : INITIAL_ROOMS;
 
-        // Auto-migrate to new 4 ward rooms if cached rooms still contain legacy names
-        const hasNewRooms = Array.isArray(loadedRooms) && loadedRooms.some((r: any) => r?.room?.includes('Lt. 1') || r?.room?.includes('Lt. 2'));
-        if (!hasNewRooms || !loadedRooms || loadedRooms.length === 0) {
-          loadedRooms = INITIAL_ROOMS;
-          localStorage.setItem(`${STORAGE_KEY_PREFIX}rooms`, JSON.stringify(INITIAL_ROOMS));
-        }
-
-        let loadedPatients = storedPatients ? JSON.parse(storedPatients) : INITIAL_PATIENTS;
-        // Migrate any patient with legacy room names
-        if (Array.isArray(loadedPatients)) {
-          loadedPatients = loadedPatients.map((p: Patient) => {
-            if (p.room === 'Ruang Teratai') {
-              return { ...p, room: p.gender === 'L' ? 'Ruang Rawat Inap Lt. 2 Laki-laki' : 'Ruang Rawat Inap Lt. 2 Perempuan' };
-            }
-            if (p.room === 'Ruang Dahlia') {
-              return { ...p, room: 'Ruang Rawat Inap Lt. 2 Anak-anak' };
-            }
-            if (p.room === 'Ruang Flamboyan' || p.room === 'Ruang Bougenville') {
-              return { ...p, room: 'Ruang Rawat Inap Lt. 1' };
-            }
-            return p;
-          });
-        }
-
-        let loadedOrders = storedOrders ? JSON.parse(storedOrders) : INITIAL_MEAL_ORDERS;
-        if (Array.isArray(loadedOrders)) {
-          loadedOrders = loadedOrders.map((o: MealOrder) => {
-            if (o.room === 'Ruang Teratai') {
-              return { ...o, room: 'Ruang Rawat Inap Lt. 2 Laki-laki' };
-            }
-            if (o.room === 'Ruang Dahlia') {
-              return { ...o, room: 'Ruang Rawat Inap Lt. 2 Anak-anak' };
-            }
-            if (o.room === 'Ruang Flamboyan' || o.room === 'Ruang Bougenville') {
-              return { ...o, room: 'Ruang Rawat Inap Lt. 1' };
-            }
-            return o;
-          });
-        }
-
         this.state = {
           users,
           currentUser,
-          patients: loadedPatients,
+          patients: storedPatients ? JSON.parse(storedPatients) : [],
           rooms: loadedRooms,
           dietTypes: storedDietTypes ? JSON.parse(storedDietTypes) : INITIAL_DIET_TYPES,
           menus: storedMenus ? JSON.parse(storedMenus) : INITIAL_MENUS,
           providers: storedProviders ? JSON.parse(storedProviders) : INITIAL_PROVIDERS,
-          orders: loadedOrders,
-          auditLogs: storedAuditLogs ? JSON.parse(storedAuditLogs) : INITIAL_AUDIT_LOGS,
+          orders: storedOrders ? JSON.parse(storedOrders) : [],
+          auditLogs: storedAuditLogs ? JSON.parse(storedAuditLogs) : [],
           settings: {
             ...INITIAL_APP_SETTINGS,
             ...this.state.settings,
             ...parsedSettings,
-            headOfPuskesmasName: parsedSettings?.headOfPuskesmasName || INITIAL_APP_SETTINGS.headOfPuskesmasName,
-            headOfPuskesmasNip: parsedSettings?.headOfPuskesmasNip || INITIAL_APP_SETTINGS.headOfPuskesmasNip,
-            dkiLogoUrl: parsedSettings?.dkiLogoUrl || this.state.settings?.dkiLogoUrl || INITIAL_APP_SETTINGS.dkiLogoUrl,
-            kemenkesLogoUrl: parsedSettings?.kemenkesLogoUrl || this.state.settings?.kemenkesLogoUrl || INITIAL_APP_SETTINGS.kemenkesLogoUrl,
           },
         };
         this.notify();
       }
-      // Start 3-second auto-sync loop across the application
       this.startAutoSyncLoop(3000);
     } catch {
       // keep baseline state if parsing fails
     }
   }
 
-  private saveState() {
+  public syncToLocalStorageOnly() {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem(`${STORAGE_KEY_PREFIX}orders`, JSON.stringify(this.state.orders));
@@ -218,9 +219,45 @@ export class DbStore {
     } catch (e) {
       console.warn('Could not save to localStorage:', e);
     }
+  }
+
+  private saveState() {
+    if (typeof window === 'undefined') return;
+    this.syncToLocalStorageOnly();
     this.notify();
-    // Auto-sync whenever data is added or updated (patient, order, qc, handover, leftover)
+
+    // 1. Simpan ke database global server sehingga otomatis tampil di semua browser lain
+    this.saveToServerDatabase();
+
+    // 2. Auto-sync ke Google Spreadsheet melalui Google Apps Script Web App
     this.triggerBackgroundGasSync();
+  }
+
+  private saveToServerDatabase() {
+    if (typeof window === 'undefined') return;
+    try {
+      const payload = {
+        users: this.state.users,
+        patients: this.state.patients,
+        orders: this.state.orders,
+        rooms: this.state.rooms,
+        dietTypes: this.state.dietTypes,
+        menus: this.state.menus,
+        providers: this.state.providers,
+        auditLogs: this.state.auditLogs,
+        settings: this.state.settings,
+      };
+
+      fetch('/api/database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ database: payload, syncWithGas: true }),
+      }).catch((e) => {
+        // network / offline fallback
+      });
+    } catch {
+      // ignore
+    }
   }
 
   // --- Auto-Sync to Google Apps Script & Google Sheets ---
@@ -272,9 +309,15 @@ export class DbStore {
       this.isSyncingWithGas = true;
       try {
         const payload = {
-          orders: this.state.orders,
-          auditLogs: this.state.auditLogs,
+          users: this.state.users,
           patients: this.state.patients,
+          orders: this.state.orders,
+          menus: this.state.menus,
+          rooms: this.state.rooms,
+          dietTypes: this.state.dietTypes,
+          providers: this.state.providers,
+          auditLogs: this.state.auditLogs,
+          settings: this.state.settings,
         };
         const response = await fetch('/api/gas', {
           method: 'POST',
@@ -291,7 +334,7 @@ export class DbStore {
           this.state.settings.lastGasSyncAt = nowIso;
           this.lastAutoSyncStatus = {
             success: true,
-            message: 'Tersinkronisasi otomatis ke Google Spreadsheet',
+            message: 'Tersinkronisasi otomatis ke Google Spreadsheet (Users, Patients, Orders, Master Data)',
             timestamp: nowIso,
           };
           this.notify();
@@ -311,6 +354,46 @@ export class DbStore {
       runSync();
     } else {
       this.syncDebounceTimer = setTimeout(runSync, 400);
+    }
+  }
+
+  /**
+   * Tarik seluruh data real dari Google Spreadsheet sekarang
+   */
+  public async pullLiveDatabaseFromGas(): Promise<{ success: boolean; message: string; data?: any }> {
+    if (typeof window === 'undefined') return { success: false, message: 'Window undefined' };
+    const gasUrl = this.state.settings.gasWebAppUrl;
+    if (!gasUrl) {
+      return { success: false, message: 'URL Web App Google Apps Script belum dikonfigurasi di Pengaturan.' };
+    }
+
+    try {
+      const res = await fetch('/api/database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'pullFromGas', gasWebAppUrl: gasUrl }),
+      });
+
+      const json = await res.json();
+      if (json.success && json.database) {
+        const db = json.database;
+        if (Array.isArray(db.users) && db.users.length > 0) this.state.users = db.users;
+        if (Array.isArray(db.patients)) this.state.patients = db.patients;
+        if (Array.isArray(db.orders)) this.state.orders = db.orders;
+        if (Array.isArray(db.menus) && db.menus.length > 0) this.state.menus = db.menus;
+        if (Array.isArray(db.rooms) && db.rooms.length > 0) this.state.rooms = db.rooms;
+        if (Array.isArray(db.dietTypes) && db.dietTypes.length > 0) this.state.dietTypes = db.dietTypes;
+        if (Array.isArray(db.providers) && db.providers.length > 0) this.state.providers = db.providers;
+        if (Array.isArray(db.auditLogs)) this.state.auditLogs = db.auditLogs;
+        if (db.settings) this.state.settings = { ...this.state.settings, ...db.settings };
+
+        this.syncToLocalStorageOnly();
+        this.notify();
+        return { success: true, message: 'Berhasil menarik seluruh data real dari Google Spreadsheet!' };
+      }
+      return { success: false, message: json.message || 'Gagal menarik data dari Spreadsheet' };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Koneksi ke server gagal' };
     }
   }
 

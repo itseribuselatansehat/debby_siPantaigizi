@@ -23,6 +23,43 @@ const handle = app.getRequestHandler();
 
 console.log(`> Menyiapkan SI PANTAI GIZI (Production Mode: ${!dev})...`);
 
+const serverInfoPath = path.join(__dirname, '.server-info.json');
+
+function writeServerInfo() {
+  try {
+    const info = {
+      status: 'online',
+      port: isSocket ? null : listenTarget,
+      socket: isSocket ? listenTarget : null,
+      pid: process.pid,
+      startTime: new Date().toISOString(),
+    };
+    fs.writeFileSync(serverInfoPath, JSON.stringify(info, null, 2), 'utf-8');
+  } catch (e) {
+    // ignore write errors
+  }
+}
+
+function cleanupServerInfo() {
+  try {
+    if (fs.existsSync(serverInfoPath)) {
+      fs.unlinkSync(serverInfoPath);
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
+process.on('SIGINT', () => {
+  cleanupServerInfo();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  cleanupServerInfo();
+  process.exit(0);
+});
+
 app.prepare()
   .then(() => {
     const server = createServer(async (req, res) => {
@@ -39,15 +76,18 @@ app.prepare()
 
     if (isSocket) {
       server.listen(listenTarget, () => {
+        writeServerInfo();
         console.log(`> SI PANTAI GIZI aktif pada Unix Socket: ${listenTarget}`);
       });
     } else {
       server.listen(listenTarget, hostname, () => {
+        writeServerInfo();
         console.log(`> SI PANTAI GIZI aktif dan melayani request di http://${hostname}:${listenTarget}`);
       });
     }
   })
   .catch((err) => {
+    cleanupServerInfo();
     console.error('Gagal menginisialisasi server Next.js:', err);
     process.exit(1);
   });

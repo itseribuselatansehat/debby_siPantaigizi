@@ -1,40 +1,44 @@
 # ====================================================================
-# HOSTINGER LITESPEED & APACHE REVERSE PROXY CONFIGURATION
-# SI PANTAI GIZI - PUSKESMAS KEPULAUAN SERIBU SELATAN
-# Solusi Definitif Mengatasi 403 Forbidden pada sipantaigizi.puskesmasseribuselatan.com
+# HOSTINGER LITESPEED / APACHE CONFIGURATION
+# SI PANTAI GIZI — Puskesmas Kepulauan Seribu Selatan
+# Domain: sipantaigizi.puskesmasseribuselatan.com
+# Solusi Definitif Mengatasi 403 Forbidden pada Hostinger LiteSpeed
 # ====================================================================
 
-# 1. Izinkan akses penuh ke direktori dan cegah 403 Forbidden dari web server
+# 1. Tetapkan index.php sebagai DirectoryIndex default
+DirectoryIndex index.php index.html
+
+# 2. Izinkan akses penuh untuk mencegah 403 Forbidden dari LiteSpeed
 <IfModule mod_authz_core.c>
   Require all granted
 </IfModule>
-
-# Matikan directory browsing bawaan server namun tetapkan index default
-Options -Indexes +FollowSymLinks
-
-# 2. Konfigurasi CloudLinux Passenger (Hostinger NodeJS Selector)
-# Jika Hostinger hPanel Node.js App diaktifkan, Passenger mengeksekusi server.js langsung
-<IfModule mod_passenger.c>
-  PassengerAppType node
-  PassengerStartupFile server.js
-  PassengerEnabled on
+<IfModule !mod_authz_core.c>
+  Order allow,deny
+  Allow from all
 </IfModule>
+
+# Matikan directory browsing
+Options -Indexes
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
 
-  # 3. Lewatkan HANYA file fisik statis yang benar-benar ada di disk (seperti gambar, favicon, manifest)
+  # 3. Teruskan file fisik statis yang benar-benar ada di disk
   RewriteCond %{REQUEST_FILENAME} -f
   RewriteRule ^ - [L]
 
-  # 4. Teruskan semua rute halaman & API ke aplikasi Node.js Next.js (port 3000 jika mod_proxy tersedia)
+  # 4. Jika Apache mod_proxy tersedia, coba proxy ke Node.js port 3000
   <IfModule mod_proxy.c>
     RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
   </IfModule>
+
+  # 5. Jika mod_proxy tidak aktif (standar di Hostinger LiteSpeed Shared/Business),
+  # teruskan semua request ke index.php yang bertindak sebagai Reverse Proxy PHP
+  RewriteRule ^(.*)$ index.php [QSA,L]
 </IfModule>
 
-# 5. Header forwarding untuk SSL / HTTPS di Hostinger
+# 6. Header Forwarding untuk HTTPS / SSL di Hostinger
 <IfModule mod_headers.c>
   RequestHeader set X-Forwarded-Proto "https" env=HTTPS
   RequestHeader set X-Forwarded-Port "443" env=HTTPS

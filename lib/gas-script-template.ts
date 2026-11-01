@@ -17,7 +17,7 @@ export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * 5. Klik tombol "Deploy" (Terapkan) di kanan atas > "New deployment" (Penerapan baru).
  * 6. Pilih tipe: "Web app" (Aplikasi web).
  * 7. Isi konfigurasi:
- *    - Description: "SI PANTAI GIZI API & Drive v2.0"
+ *    - Description: "SI PANTAI GIZI Database & Drive v3.0"
  *    - Execute as: "Me" (Saya - email akun Google Anda)
  *    - Who has access: "Anyone" (Siapa saja)
  * 8. Klik Deploy, berikan otorisasi izin Google Spreadsheet & Google Drive jika diminta.
@@ -33,6 +33,7 @@ const SHEET_NAMES = {
   PATIENTS: 'Patients',
   USERS: 'Users',
   MENUS: 'Menus',
+  ROOMS: 'Rooms',
   DIET_TYPES: 'DietTypes',
   PROVIDERS: 'Providers',
   AUDIT_LOGS: 'AuditLogs',
@@ -62,16 +63,19 @@ function setupDatabaseSheets() {
       'status', 'clinicalDiagnosis', 'foodAllergies', 'dietaryRestrictions'
     ],
     [SHEET_NAMES.USERS]: [
-      'id', 'name', 'nipOrNik', 'role', 'email', 'phoneNumber', 'unitOrWard', 'providerId'
+      'id', 'name', 'nipOrNik', 'role', 'email', 'username', 'password', 'status', 'phoneNumber', 'unitOrWard', 'providerId', 'updatedAt'
     ],
     [SHEET_NAMES.MENUS]: [
-      'id', 'code', 'name', 'dietCategoryName', 'texture', 'components', 'pricePerPortion', 'contractReference'
+      'id', 'code', 'name', 'dietCategoryName', 'texture', 'components', 'pricePerPortion', 'contractReference', 'updatedAt'
+    ],
+    [SHEET_NAMES.ROOMS]: [
+      'id', 'room', 'bed', 'type', 'updatedAt'
     ],
     [SHEET_NAMES.DIET_TYPES]: [
-      'id', 'code', 'name', 'description', 'allowedTextures'
+      'id', 'code', 'name', 'description', 'allowedTextures', 'updatedAt'
     ],
     [SHEET_NAMES.PROVIDERS]: [
-      'id', 'name', 'code', 'contactPerson', 'phone', 'address', 'contractNumber'
+      'id', 'code', 'name', 'contactPerson', 'phone', 'address', 'contractNumber', 'contractStart', 'contractEnd', 'status', 'updatedAt'
     ],
     [SHEET_NAMES.AUDIT_LOGS]: [
       'id', 'timestamp', 'userName', 'userRole', 'action', 'module', 'referenceId', 'details'
@@ -118,6 +122,36 @@ function doGet(e) {
       return createJsonResponse(setupRes);
     }
 
+    if (action === 'getDatabase') {
+      return createJsonResponse({
+        status: 'SUCCESS',
+        spreadsheetName: ss.getName(),
+        database: {
+          users: getSheetData(ss, SHEET_NAMES.USERS),
+          patients: getSheetData(ss, SHEET_NAMES.PATIENTS),
+          orders: getSheetData(ss, SHEET_NAMES.ORDERS),
+          menus: getSheetData(ss, SHEET_NAMES.MENUS),
+          rooms: getSheetData(ss, SHEET_NAMES.ROOMS),
+          dietTypes: getSheetData(ss, SHEET_NAMES.DIET_TYPES),
+          providers: getSheetData(ss, SHEET_NAMES.PROVIDERS),
+          auditLogs: getSheetData(ss, SHEET_NAMES.AUDIT_LOGS),
+          settings: getSettingsFromSheet(ss)
+        }
+      });
+    }
+
+    if (action === 'getUsers') {
+      return createJsonResponse({ status: 'SUCCESS', data: getSheetData(ss, SHEET_NAMES.USERS) });
+    }
+
+    if (action === 'getOrders') {
+      return createJsonResponse({ status: 'SUCCESS', data: getSheetData(ss, SHEET_NAMES.ORDERS) });
+    }
+
+    if (action === 'getPatients') {
+      return createJsonResponse({ status: 'SUCCESS', data: getSheetData(ss, SHEET_NAMES.PATIENTS) });
+    }
+
     if (action === 'ping') {
       let driveFolderStatus = 'UNKNOWN';
       try {
@@ -138,15 +172,6 @@ function doGet(e) {
       });
     }
 
-    if (action === 'getOrders') {
-      const sheet = ss.getSheetByName(SHEET_NAMES.ORDERS);
-      if (!sheet || sheet.getLastRow() < 2) {
-        return createJsonResponse({ status: 'SUCCESS', data: [] });
-      }
-      const data = sheetToObjects(sheet);
-      return createJsonResponse({ status: 'SUCCESS', count: data.length, data: data });
-    }
-
     return createJsonResponse({ status: 'ERROR', message: 'Aksi GET tidak dikenali: ' + action });
   } catch (err) {
     return createJsonResponse({ status: 'ERROR', error: err.toString() });
@@ -154,7 +179,7 @@ function doGet(e) {
 }
 
 /**
- * Handle POST Requests (Sinkronisasi Order, Transaksi, Audit Log, Upload Foto Drive & 1-Click Setup)
+ * Handle POST Requests
  */
 function doPost(e) {
   try {
@@ -165,6 +190,24 @@ function doPost(e) {
     if (action === 'setupDatabase') {
       const setupRes = setupDatabaseSheets();
       return createJsonResponse(setupRes);
+    }
+
+    if (action === 'getDatabase') {
+      return createJsonResponse({
+        status: 'SUCCESS',
+        spreadsheetName: ss.getName(),
+        database: {
+          users: getSheetData(ss, SHEET_NAMES.USERS),
+          patients: getSheetData(ss, SHEET_NAMES.PATIENTS),
+          orders: getSheetData(ss, SHEET_NAMES.ORDERS),
+          menus: getSheetData(ss, SHEET_NAMES.MENUS),
+          rooms: getSheetData(ss, SHEET_NAMES.ROOMS),
+          dietTypes: getSheetData(ss, SHEET_NAMES.DIET_TYPES),
+          providers: getSheetData(ss, SHEET_NAMES.PROVIDERS),
+          auditLogs: getSheetData(ss, SHEET_NAMES.AUDIT_LOGS),
+          settings: getSettingsFromSheet(ss)
+        }
+      });
     }
 
     // =========================================================================
@@ -186,11 +229,10 @@ function doPost(e) {
       } catch (err) {
         return createJsonResponse({
           status: 'ERROR',
-          message: 'Folder Google Drive (' + folderId + ') tidak dapat diakses. Pastikan folder sudah dibagikan atau akun Apps Script memiliki izin.'
+          message: 'Folder Google Drive (' + folderId + ') tidak dapat diakses. Pastikan folder sudah dibagikan.'
         });
       }
 
-      // Bersihkan header data URL (contoh: data:image/jpeg;base64,...)
       let cleanBase64 = base64Data;
       if (cleanBase64.indexOf(',') > -1) {
         cleanBase64 = cleanBase64.split(',')[1];
@@ -202,9 +244,7 @@ function doPost(e) {
 
       try {
         file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      } catch (shareErr) {
-        // Abaikan jika domain membatasi izin sharing publik
-      }
+      } catch (shareErr) {}
 
       const fileId = file.getId();
       const webViewLink = 'https://drive.google.com/file/d/' + fileId + '/view?usp=sharing';
@@ -222,48 +262,100 @@ function doPost(e) {
       });
     }
 
+    // =========================================================================
+    // SINKRONISASI MENYELURUH (USERS, PATIENTS, ORDERS, MENUS, ROOMS, DIETS, ETC)
+    // =========================================================================
     if (action === 'syncAll') {
-      // Sinkronisasi data menyeluruh dari Web App ke Google Sheets
       const payload = postData.payload || {};
-      
+
+      if (payload.users && Array.isArray(payload.users)) {
+        upsertUsers(ss, payload.users);
+      }
       if (payload.patients && Array.isArray(payload.patients)) {
         upsertPatients(ss, payload.patients);
       }
       if (payload.orders && Array.isArray(payload.orders)) {
         upsertOrders(ss, payload.orders);
       }
+      if (payload.menus && Array.isArray(payload.menus)) {
+        upsertMenus(ss, payload.menus);
+      }
+      if (payload.rooms && Array.isArray(payload.rooms)) {
+        upsertRooms(ss, payload.rooms);
+      }
+      if (payload.dietTypes && Array.isArray(payload.dietTypes)) {
+        upsertDietTypes(ss, payload.dietTypes);
+      }
+      if (payload.providers && Array.isArray(payload.providers)) {
+        upsertProviders(ss, payload.providers);
+      }
       if (payload.auditLogs && Array.isArray(payload.auditLogs)) {
         appendAuditLogs(ss, payload.auditLogs);
+      }
+      if (payload.settings) {
+        upsertSettings(ss, payload.settings);
       }
 
       return createJsonResponse({
         status: 'SUCCESS',
-        message: 'Sinkronisasi dengan Google Spreadsheet berhasil disimpan.',
+        message: 'Seluruh data pengguna, pasien, order makanan, master data & pengaturan berhasil disinkronkan ke Google Spreadsheet.',
         timestamp: new Date().toISOString()
       });
     }
 
-    if (action === 'saveOrder') {
-      const order = postData.order || (postData.payload && postData.payload.order);
-      if (!order || !order.id) {
-        return createJsonResponse({ status: 'ERROR', message: 'Data order tidak lengkap' });
-      }
-      upsertOrders(ss, [order]);
-      return createJsonResponse({ status: 'SUCCESS', message: 'Order berhasil diperbarui di Spreadsheet' });
-    }
-
-    if (action === 'logAudit') {
-      const log = postData.log || (postData.payload && postData.payload.log);
-      if (log) {
-        appendAuditLogs(ss, [log]);
-      }
-      return createJsonResponse({ status: 'SUCCESS', message: 'Audit log tercatat di Spreadsheet' });
+    if (action === 'syncUsers' && postData.users) {
+      upsertUsers(ss, postData.users);
+      return createJsonResponse({ status: 'SUCCESS', message: 'Data pengguna berhasil disinkronkan ke Spreadsheet' });
     }
 
     return createJsonResponse({ status: 'ERROR', message: 'Aksi POST tidak valid: ' + action });
   } catch (err) {
     return createJsonResponse({ status: 'ERROR', error: err.toString() });
   }
+}
+
+/**
+ * Simpan / perbarui data Users
+ */
+function upsertUsers(ss, users) {
+  let sheet = ss.getSheetByName(SHEET_NAMES.USERS);
+  if (!sheet) {
+    setupDatabaseSheets();
+    sheet = ss.getSheetByName(SHEET_NAMES.USERS);
+  }
+
+  const existingData = sheet.getDataRange().getValues();
+  const headers = existingData[0];
+  const idColIndex = headers.indexOf('id');
+  const existingMap = {};
+
+  for (let r = 1; r < existingData.length; r++) {
+    const idVal = existingData[r][idColIndex];
+    if (idVal) existingMap[idVal] = r + 1;
+  }
+
+  users.forEach(function(u) {
+    const rowValues = [
+      u.id || '',
+      u.name || '',
+      u.nipOrNik || '',
+      u.role || '',
+      u.email || '',
+      u.username || '',
+      u.password || '',
+      u.status || 'ACTIVE',
+      u.phoneNumber || '',
+      u.unitOrWard || '',
+      u.providerId || '',
+      new Date().toISOString()
+    ];
+
+    if (existingMap[u.id]) {
+      sheet.getRange(existingMap[u.id], 1, 1, rowValues.length).setValues([rowValues]);
+    } else {
+      sheet.appendRow(rowValues);
+    }
+  });
 }
 
 /**
@@ -279,11 +371,11 @@ function upsertOrders(ss, orders) {
   const existingData = sheet.getDataRange().getValues();
   const headers = existingData[0];
   const idColIndex = headers.indexOf('id');
-
   const existingMap = {};
+
   for (let r = 1; r < existingData.length; r++) {
     const idVal = existingData[r][idColIndex];
-    if (idVal) existingMap[idVal] = r + 1; // row 1-indexed
+    if (idVal) existingMap[idVal] = r + 1;
   }
 
   orders.forEach(function(order) {
@@ -328,36 +420,10 @@ function upsertOrders(ss, orders) {
     ];
 
     if (existingMap[order.id]) {
-      // Update existing row
       sheet.getRange(existingMap[order.id], 1, 1, rowValues.length).setValues([rowValues]);
     } else {
-      // Append new row
       sheet.appendRow(rowValues);
     }
-  });
-}
-
-/**
- * Tambah catatan audit trail ke sheet AuditLogs
- */
-function appendAuditLogs(ss, logs) {
-  let sheet = ss.getSheetByName(SHEET_NAMES.AUDIT_LOGS);
-  if (!sheet) {
-    setupDatabaseSheets();
-    sheet = ss.getSheetByName(SHEET_NAMES.AUDIT_LOGS);
-  }
-
-  logs.forEach(function(l) {
-    sheet.appendRow([
-      l.id || Utilities.getUuid(),
-      l.timestamp || new Date().toISOString(),
-      l.userName || '',
-      l.userRole || '',
-      l.action || '',
-      l.module || '',
-      l.referenceId || '',
-      l.details || ''
-    ]);
   });
 }
 
@@ -374,8 +440,8 @@ function upsertPatients(ss, patients) {
   const existingData = sheet.getDataRange().getValues();
   const headers = existingData[0];
   const idColIndex = headers.indexOf('id');
-
   const existingMap = {};
+
   for (let r = 1; r < existingData.length; r++) {
     const idVal = existingData[r][idColIndex];
     if (idVal) existingMap[idVal] = r + 1;
@@ -404,27 +470,252 @@ function upsertPatients(ss, patients) {
     ];
 
     if (existingMap[p.id]) {
-      const rowNum = existingMap[p.id];
-      sheet.getRange(rowNum, 1, 1, rowValues.length).setValues([rowValues]);
+      sheet.getRange(existingMap[p.id], 1, 1, rowValues.length).setValues([rowValues]);
     } else {
       sheet.appendRow(rowValues);
     }
   });
 }
 
-function sheetToObjects(sheet) {
+/**
+ * Simpan / perbarui Menus
+ */
+function upsertMenus(ss, menus) {
+  let sheet = ss.getSheetByName(SHEET_NAMES.MENUS);
+  if (!sheet) {
+    setupDatabaseSheets();
+    sheet = ss.getSheetByName(SHEET_NAMES.MENUS);
+  }
+
+  const existingData = sheet.getDataRange().getValues();
+  const idColIndex = existingData[0].indexOf('id');
+  const existingMap = {};
+  for (let r = 1; r < existingData.length; r++) {
+    const idVal = existingData[r][idColIndex];
+    if (idVal) existingMap[idVal] = r + 1;
+  }
+
+  menus.forEach(function(m) {
+    const rowValues = [
+      m.id || '',
+      m.code || '',
+      m.name || '',
+      m.dietCategoryName || '',
+      m.texture || '',
+      Array.isArray(m.components) ? m.components.join(', ') : (m.components || ''),
+      m.pricePerPortion || 0,
+      m.contractReference || '',
+      new Date().toISOString()
+    ];
+    if (existingMap[m.id]) {
+      sheet.getRange(existingMap[m.id], 1, 1, rowValues.length).setValues([rowValues]);
+    } else {
+      sheet.appendRow(rowValues);
+    }
+  });
+}
+
+/**
+ * Simpan / perbarui Rooms
+ */
+function upsertRooms(ss, rooms) {
+  let sheet = ss.getSheetByName(SHEET_NAMES.ROOMS);
+  if (!sheet) {
+    setupDatabaseSheets();
+    sheet = ss.getSheetByName(SHEET_NAMES.ROOMS);
+  }
+
+  const existingData = sheet.getDataRange().getValues();
+  const idColIndex = existingData[0].indexOf('id');
+  const existingMap = {};
+  for (let r = 1; r < existingData.length; r++) {
+    const idVal = existingData[r][idColIndex];
+    if (idVal) existingMap[idVal] = r + 1;
+  }
+
+  rooms.forEach(function(rItem) {
+    const rowValues = [
+      rItem.id || '',
+      rItem.room || '',
+      rItem.bed || '',
+      rItem.type || '',
+      new Date().toISOString()
+    ];
+    if (existingMap[rItem.id]) {
+      sheet.getRange(existingMap[rItem.id], 1, 1, rowValues.length).setValues([rowValues]);
+    } else {
+      sheet.appendRow(rowValues);
+    }
+  });
+}
+
+/**
+ * Simpan / perbarui DietTypes
+ */
+function upsertDietTypes(ss, dietTypes) {
+  let sheet = ss.getSheetByName(SHEET_NAMES.DIET_TYPES);
+  if (!sheet) {
+    setupDatabaseSheets();
+    sheet = ss.getSheetByName(SHEET_NAMES.DIET_TYPES);
+  }
+
+  const existingData = sheet.getDataRange().getValues();
+  const idColIndex = existingData[0].indexOf('id');
+  const existingMap = {};
+  for (let r = 1; r < existingData.length; r++) {
+    const idVal = existingData[r][idColIndex];
+    if (idVal) existingMap[idVal] = r + 1;
+  }
+
+  dietTypes.forEach(function(d) {
+    const rowValues = [
+      d.id || '',
+      d.code || '',
+      d.name || '',
+      d.description || '',
+      Array.isArray(d.allowedTextures) ? d.allowedTextures.join(', ') : (d.allowedTextures || ''),
+      new Date().toISOString()
+    ];
+    if (existingMap[d.id]) {
+      sheet.getRange(existingMap[d.id], 1, 1, rowValues.length).setValues([rowValues]);
+    } else {
+      sheet.appendRow(rowValues);
+    }
+  });
+}
+
+/**
+ * Simpan / perbarui Providers
+ */
+function upsertProviders(ss, providers) {
+  let sheet = ss.getSheetByName(SHEET_NAMES.PROVIDERS);
+  if (!sheet) {
+    setupDatabaseSheets();
+    sheet = ss.getSheetByName(SHEET_NAMES.PROVIDERS);
+  }
+
+  const existingData = sheet.getDataRange().getValues();
+  const idColIndex = existingData[0].indexOf('id');
+  const existingMap = {};
+  for (let r = 1; r < existingData.length; r++) {
+    const idVal = existingData[r][idColIndex];
+    if (idVal) existingMap[idVal] = r + 1;
+  }
+
+  providers.forEach(function(pr) {
+    const rowValues = [
+      pr.id || '',
+      pr.code || '',
+      pr.name || '',
+      pr.contactPerson || '',
+      pr.phone || '',
+      pr.address || '',
+      pr.contractNumber || '',
+      pr.contractStart || '',
+      pr.contractEnd || '',
+      pr.status || 'ACTIVE',
+      new Date().toISOString()
+    ];
+    if (existingMap[pr.id]) {
+      sheet.getRange(existingMap[pr.id], 1, 1, rowValues.length).setValues([rowValues]);
+    } else {
+      sheet.appendRow(rowValues);
+    }
+  });
+}
+
+/**
+ * Simpan / perbarui AppSettings
+ */
+function upsertSettings(ss, settings) {
+  let sheet = ss.getSheetByName(SHEET_NAMES.APP_SETTINGS);
+  if (!sheet) {
+    setupDatabaseSheets();
+    sheet = ss.getSheetByName(SHEET_NAMES.APP_SETTINGS);
+  }
+
+  const existingData = sheet.getDataRange().getValues();
+  const keyColIndex = existingData[0].indexOf('key');
+  const existingMap = {};
+  for (let r = 1; r < existingData.length; r++) {
+    const kVal = existingData[r][keyColIndex];
+    if (kVal) existingMap[kVal] = r + 1;
+  }
+
+  for (const k in settings) {
+    const val = typeof settings[k] === 'object' ? JSON.stringify(settings[k]) : String(settings[k]);
+    const row = [k, val, new Date().toISOString()];
+    if (existingMap[k]) {
+      sheet.getRange(existingMap[k], 1, 1, 3).setValues([row]);
+    } else {
+      sheet.appendRow(row);
+    }
+  }
+}
+
+/**
+ * Tambah catatan audit trail ke sheet AuditLogs
+ */
+function appendAuditLogs(ss, logs) {
+  let sheet = ss.getSheetByName(SHEET_NAMES.AUDIT_LOGS);
+  if (!sheet) {
+    setupDatabaseSheets();
+    sheet = ss.getSheetByName(SHEET_NAMES.AUDIT_LOGS);
+  }
+
+  logs.forEach(function(l) {
+    sheet.appendRow([
+      l.id || Utilities.getUuid(),
+      l.timestamp || new Date().toISOString(),
+      l.userName || '',
+      l.userRole || '',
+      l.action || '',
+      l.module || '',
+      l.referenceId || '',
+      l.details || ''
+    ]);
+  });
+}
+
+function getSheetData(ss, sheetName) {
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet || sheet.getLastRow() < 2) return [];
   const rows = sheet.getDataRange().getValues();
-  if (rows.length < 2) return [];
   const headers = rows[0];
   const results = [];
   for (let i = 1; i < rows.length; i++) {
     const obj = {};
     for (let j = 0; j < headers.length; j++) {
-      obj[headers[j]] = rows[i][j];
+      let val = rows[i][j];
+      // Parse array fields if string with comma
+      if (headers[j] === 'components' || headers[j] === 'allowedTextures' || headers[j] === 'foodAllergies' || headers[j] === 'allergies') {
+        if (typeof val === 'string' && val.indexOf(',') > -1) {
+          val = val.split(',').map(function(s) { return s.trim(); });
+        } else if (typeof val === 'string' && val.trim().length > 0) {
+          val = [val.trim()];
+        }
+      }
+      obj[headers[j]] = val;
     }
     results.push(obj);
   }
   return results;
+}
+
+function getSettingsFromSheet(ss) {
+  const sheet = ss.getSheetByName(SHEET_NAMES.APP_SETTINGS);
+  if (!sheet || sheet.getLastRow() < 2) return {};
+  const rows = sheet.getDataRange().getValues();
+  const settings = {};
+  for (let i = 1; i < rows.length; i++) {
+    const k = rows[i][0];
+    let v = rows[i][1];
+    try {
+      v = JSON.parse(v);
+    } catch (e) {}
+    if (k) settings[k] = v;
+  }
+  return settings;
 }
 
 function createJsonResponse(data) {

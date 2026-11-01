@@ -218,6 +218,32 @@ export function GasSettingsModule() {
     }
   };
 
+  const [isPulling, setIsPulling] = useState(false);
+  const [pullResult, setPullResult] = useState<string | null>(null);
+
+  const handlePullFromSheets = async () => {
+    if (!gasUrl.trim()) {
+      alert('URL Web App Google Apps Script belum dikonfigurasi.');
+      return;
+    }
+
+    setIsPulling(true);
+    setPullResult(null);
+
+    try {
+      const res = await db.pullLiveDatabaseFromGas();
+      if (res.success) {
+        setPullResult('Berhasil! Seluruh data real (Pengguna, Pasien, Order Makanan, Master Data, dan Pengaturan) telah ditarik dari Google Spreadsheet dan disimpan permanen.');
+      } else {
+        setPullResult(`Gagal menarik data: ${res.message}`);
+      }
+    } catch (err: any) {
+      setPullResult(`Terjadi error saat menarik data: ${err?.message || 'Error jaringan'}`);
+    } finally {
+      setIsPulling(false);
+    }
+  };
+
   const handleSyncToSheets = async () => {
     if (!gasUrl.trim()) {
       alert('URL Web App Google Apps Script belum dikonfigurasi.');
@@ -228,9 +254,15 @@ export function GasSettingsModule() {
     setSyncResult(null);
 
     try {
-      const orders = db.getOrders();
-      const auditLogs = db.getAuditLogs();
+      const users = db.getUsers();
       const patients = db.getPatients();
+      const orders = db.getOrders();
+      const menus = db.getMenus();
+      const rooms = db.getRooms();
+      const dietTypes = db.getDietTypes();
+      const providers = db.getProviders();
+      const auditLogs = db.getAuditLogs();
+      const currentSettings = db.getSettings();
 
       const response = await fetch('/api/gas', {
         method: 'POST',
@@ -239,16 +271,22 @@ export function GasSettingsModule() {
           gasWebAppUrl: gasUrl.trim(),
           action: 'syncAll',
           payload: {
-            orders,
-            auditLogs,
+            users,
             patients,
+            orders,
+            menus,
+            rooms,
+            dietTypes,
+            providers,
+            auditLogs,
+            settings: currentSettings,
           },
         }),
       });
 
       const res = await response.json();
       if (res.success) {
-        setSyncResult(`Sinkronisasi berhasil! ${orders.length} order, ${patients.length} data pasien rawat inap, dan ${auditLogs.length} audit logs tersimpan di Google Sheets.`);
+        setSyncResult(`Sinkronisasi berhasil! ${users.length} pengguna, ${patients.length} data pasien, ${orders.length} order makanan, dan master data tersimpan di Google Sheets.`);
         db.updateSettings({ lastGasSyncAt: new Date().toISOString() });
       } else {
         setSyncResult(`Gagal sinkronisasi: ${res.message || 'Cek URL Web App GAS Anda.'}`);
@@ -688,25 +726,47 @@ export function GasSettingsModule() {
                 </p>
               </div>
 
-              <span className="font-semibold text-slate-800 block">Kirim &amp; Sinkronkan Data Sekarang Secara Manual:</span>
-              <button
-                type="button"
-                onClick={handleSyncToSheets}
-                disabled={isSyncing || !gasUrl}
-                className={`w-full py-2.5 rounded-lg font-bold shadow-sm flex items-center justify-center gap-2 transition-colors ${
-                  gasUrl
-                    ? 'bg-teal-700 hover:bg-teal-800 text-white'
-                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                }`}
-              >
-                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                <span>
-                  {isSyncing ? 'Menyinkronkan ke Google Sheets...' : 'Kirim Seluruh Data ke Google Spreadsheet'}
-                </span>
-              </button>
+              <span className="font-semibold text-slate-800 block">Operasi Sinkronisasi Manual Google Spreadsheet:</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handlePullFromSheets}
+                  disabled={isPulling || !gasUrl}
+                  className={`py-2.5 px-3 rounded-lg font-bold shadow-xs flex items-center justify-center gap-2 text-xs transition-colors ${
+                    gasUrl
+                      ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  }`}
+                  title="Tarik seluruh data dari Google Spreadsheet dan sinkronkan ke semua browser"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isPulling ? 'animate-spin' : ''}`} />
+                  <span>{isPulling ? 'Menarik Data...' : '⬇ Tarik Data dari Spreadsheet'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSyncToSheets}
+                  disabled={isSyncing || !gasUrl}
+                  className={`py-2.5 px-3 rounded-lg font-bold shadow-xs flex items-center justify-center gap-2 text-xs transition-colors ${
+                    gasUrl
+                      ? 'bg-teal-700 hover:bg-teal-800 text-white'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  }`}
+                  title="Kirim seluruh data aplikasi ke Google Spreadsheet"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'Mengirim Data...' : '⬆ Kirim Data ke Spreadsheet'}</span>
+                </button>
+              </div>
+
+              {pullResult && (
+                <p className="p-2.5 bg-emerald-50 border border-emerald-200 rounded text-emerald-900 text-center font-medium text-xs">
+                  {pullResult}
+                </p>
+              )}
 
               {syncResult && (
-                <p className="p-2.5 bg-slate-50 border border-slate-200 rounded text-slate-700 text-center font-medium">
+                <p className="p-2.5 bg-slate-50 border border-slate-200 rounded text-slate-700 text-center font-medium text-xs">
                   {syncResult}
                 </p>
               )}

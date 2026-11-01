@@ -656,10 +656,10 @@ export function ReportsModule({ orders, patients }: ReportsModuleProps) {
         <div className="pt-8 grid grid-cols-2 text-center text-xs text-black">
           <div>
             <p>Mengetahui,</p>
-            <p className="font-semibold">Kepala Puskesmas Kec. Kepulauan Seribu Selatan</p>
+            <p className="font-semibold">Kepala Puskesmas Kepulauan Seribu Selatan</p>
             <div className="h-16"></div>
-            <p className="font-bold underline">drg. Hendra Setiawan</p>
-            <p className="text-[11px]">NIP. 198205142008011003</p>
+            <p className="font-bold underline">{settings.headOfPuskesmasName || 'dr. Ignatius Dendy Purnama'}</p>
+            <p className="text-[11px]">NIP. {settings.headOfPuskesmasNip || '198607192014031004'}</p>
           </div>
           <div>
             <p>Kepulauan Seribu, {formatJakartaDate(new Date())}</p>

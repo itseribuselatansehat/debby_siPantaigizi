@@ -105,8 +105,10 @@ export default function HomePage() {
         return <PatientDistributionModule orders={orders} onOrderUpdated={refreshData} />;
       case 'leftovers':
         return <LeftoversMonitoringModule orders={orders} onOrderUpdated={refreshData} />;
+      case 'user_management':
+        return <MasterDataModule initialTab="USERS" />;
       case 'master_menu_diet':
-        return <MasterDataModule initialTab="MENUS" />;
+        return <MasterDataModule initialTab="USERS" />;
       case 'master_pricing':
         return <MasterDataModule initialTab="MENUS" />;
       case 'billing':

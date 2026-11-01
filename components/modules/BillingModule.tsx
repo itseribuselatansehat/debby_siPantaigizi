@@ -391,6 +391,24 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
             </tfoot>
           </table>
         </div>
+
+        {/* Printable Signature Footer */}
+        <div className="p-8 hidden print:grid grid-cols-2 text-center text-xs text-black border-t-2 border-black mt-4">
+          <div>
+            <p>Mengetahui &amp; Menyetujui,</p>
+            <p className="font-semibold">Kepala Puskesmas Kepulauan Seribu Selatan</p>
+            <div className="h-16"></div>
+            <p className="font-bold underline">{settings.headOfPuskesmasName || 'dr. Ignatius Dendy Purnama'}</p>
+            <p className="text-[11px]">NIP. {settings.headOfPuskesmasNip || '198607192014031004'}</p>
+          </div>
+          <div>
+            <p>Kepulauan Seribu, {formatJakartaDate(new Date())}</p>
+            <p className="font-semibold">Petugas Verifikasi Tagihan / Ahli Gizi</p>
+            <div className="h-16"></div>
+            <p className="font-bold underline">Siti Rahmawati, S.Tr.Gz, RD</p>
+            <p className="text-[11px]">NIP. 199109232015032002</p>
+          </div>
+        </div>
       </div>
 
       {/* Modal: Adjust Billing & Portions with Audit Trail */}

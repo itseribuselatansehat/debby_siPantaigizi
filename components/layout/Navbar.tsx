@@ -43,20 +43,22 @@ export function Navbar({
     db.setCurrentUser(user);
     setShowRoleDropdown(false);
     // If switching to doctor/perawat and active module is not one of their 3 menus, reset to dashboard
-    if (user.role === 'DOKTER_PERAWAT' && !['dashboard', 'patients', 'orders'].includes(activeModule)) {
+    if ((user.role === 'DOKTER_PERAWAT' || user.role === 'DOKTER' || user.role === 'PERAWAT') && !['dashboard', 'patients', 'orders'].includes(activeModule)) {
       setActiveModule('dashboard');
     }
   };
 
   const roleLabelMap: Record<UserRole, string> = {
     ADMIN: 'Administrator Sistem',
+    DOKTER: 'Dokter DPJP',
+    PERAWAT: 'Perawat Bangsal',
     DOKTER_PERAWAT: 'Dokter / Perawat',
     AHLI_GIZI: 'Ahli Gizi (Nutrisionis)',
     PENYEDIA: 'Penyedia Makanan',
     PJLP_PRAMUSAJI: 'PJLP / Pramusaji',
   };
 
-  const isDoctorNurse = currentUser.role === 'DOKTER_PERAWAT';
+  const isDoctorNurse = currentUser.role === 'DOKTER_PERAWAT' || currentUser.role === 'DOKTER' || currentUser.role === 'PERAWAT';
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200">

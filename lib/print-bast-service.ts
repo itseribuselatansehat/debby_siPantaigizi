@@ -1017,6 +1017,12 @@ export function printPatientMealHistoryInNewTab(
       </div>
     </div>
 
+    <div style="margin-top: 20px; text-align: center; font-size: 10.5px;">
+      <div style="color: #475569; margin-bottom: 28px;">Mengetahui &amp; Menyetujui,<br/><strong>Kepala Puskesmas Kepulauan Seribu Selatan:</strong></div>
+      <div style="font-weight: 700; text-decoration: underline; font-size: 11px;">${settings.headOfPuskesmasName || 'dr. Ignatius Dendy Purnama'}</div>
+      <div style="font-size: 9.5px; color: #64748b; font-family: monospace;">NIP. ${settings.headOfPuskesmasNip || '198607192014031004'}</div>
+    </div>
+
     <div class="doc-footer">
       <span>SI PANTAI GIZI · Rekapitulasi Riwayat Nutrisi Puskesmas Kepulauan Seribu Selatan</span>
       <span>Dicetak: ${nowStr}</span>

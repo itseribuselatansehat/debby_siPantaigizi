@@ -1,6 +1,8 @@
 {
   "puskesmasName": "Puskesmas Kepulauan Seribu Selatan",
   "puskesmasRegion": "Wilayah Pesisir & Kepulauan Seribu, DKI Jakarta",
+  "headOfPuskesmasName": "dr. Ignatius Dendy Purnama",
+  "headOfPuskesmasNip": "198607192014031004",
   "address": "Jl. Dermaga Pelabuhan Utama No. 4, Pulau Tidung, Kepulauan Seribu",
   "phone": "(021) 645-8901",
   "nutritionistPhone": "6281287654321",
@@ -13,5 +15,5 @@
   "autoSyncGas": false,
   "minFoodTempServeCelsius": 60,
   "maxFoodTempServeCelsius": 75,
-  "updatedAt": "2026-10-31T09:25:00.000Z"
+  "updatedAt": "2026-10-31T09:30:00.000Z"
 }

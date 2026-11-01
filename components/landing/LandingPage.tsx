@@ -50,10 +50,34 @@ export function LandingPage({ onLoginAsUser }: LandingPageProps) {
       responsibilities: string[];
     }
   > = {
-    DOKTER_PERAWAT: {
-      title: 'Dokter / Perawat',
+    DOKTER: {
+      title: 'Dokter DPJP',
+      color: 'border-blue-500 text-blue-700',
+      bgBadge: 'bg-blue-50 text-blue-800 border-blue-200',
+      icon: Stethoscope,
+      description: 'Preskripsi diet medis klinis pasien rawat inap dan IGD dengan notifikasi terpadu ke Ahli Gizi.',
+      responsibilities: [
+        'Diagnosis klinis, restriksi gizi, dan alergi makanan pasien',
+        'Penginputan kebutuhan makan saat visitasi rawat inap',
+        'Notifikasi WhatsApp otomatis ke Nutrisionis Puskesmas',
+      ],
+    },
+    PERAWAT: {
+      title: 'Perawat Bangsal',
       color: 'border-sky-500 text-sky-700',
       bgBadge: 'bg-sky-50 text-sky-800 border-sky-200',
+      icon: Stethoscope,
+      description: 'Pendaftaran rawat inap baru, mutasi bed ruangan, dan monitoring kondisi pasien.',
+      responsibilities: [
+        'Pendaftaran pasien rawat inap ke sistem & alokasi kamar',
+        'Pencatatan perawat penanggung jawab & serah terima jadwal',
+        'Koordinasi status kesiapan pasien menerima asupan',
+      ],
+    },
+    DOKTER_PERAWAT: {
+      title: 'Dokter / Perawat',
+      color: 'border-cyan-500 text-cyan-700',
+      bgBadge: 'bg-cyan-50 text-cyan-800 border-cyan-200',
       icon: Stethoscope,
       description: 'Preskripsi diet medis pasien rawat inap dan IGD dengan notifikasi WhatsApp langsung ke Ahli Gizi.',
       responsibilities: [
@@ -128,7 +152,11 @@ export function LandingPage({ onLoginAsUser }: LandingPageProps) {
   const filteredUsers =
     selectedRoleFilter === 'ALL'
       ? allUsers
-      : allUsers.filter((u) => u.role === selectedRoleFilter);
+      : allUsers.filter((u) => {
+          if (selectedRoleFilter === 'DOKTER') return u.role === 'DOKTER' || u.role === 'DOKTER_PERAWAT';
+          if (selectedRoleFilter === 'PERAWAT') return u.role === 'PERAWAT' || u.role === 'DOKTER_PERAWAT';
+          return u.role === selectedRoleFilter;
+        });
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
@@ -371,14 +399,25 @@ export function LandingPage({ onLoginAsUser }: LandingPageProps) {
             </button>
             <button
               type="button"
-              onClick={() => setSelectedRoleFilter('DOKTER_PERAWAT')}
+              onClick={() => setSelectedRoleFilter('DOKTER')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                selectedRoleFilter === 'DOKTER_PERAWAT'
+                selectedRoleFilter === 'DOKTER'
+                  ? 'bg-blue-700 text-white shadow-sm'
+                  : 'bg-white text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Dokter
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedRoleFilter('PERAWAT')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                selectedRoleFilter === 'PERAWAT'
                   ? 'bg-sky-700 text-white shadow-sm'
                   : 'bg-white text-slate-600 hover:bg-slate-200'
               }`}
             >
-              Dokter / Perawat
+              Perawat
             </button>
             <button
               type="button"

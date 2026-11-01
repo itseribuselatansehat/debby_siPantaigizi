@@ -2,6 +2,8 @@
 
 export type UserRole =
   | 'ADMIN'
+  | 'DOKTER'
+  | 'PERAWAT'
   | 'DOKTER_PERAWAT'
   | 'AHLI_GIZI'
   | 'PENYEDIA'
@@ -13,6 +15,9 @@ export interface UserProfile {
   nipOrNik: string;
   role: UserRole;
   email: string;
+  username?: string;
+  password?: string;
+  status?: 'ACTIVE' | 'INACTIVE';
   phoneNumber?: string;
   unitOrWard?: string;
   providerId?: string; // If role === 'PENYEDIA'
@@ -246,6 +251,8 @@ export interface AuditLogEntry {
 export interface AppSettings {
   puskesmasName: string;
   puskesmasRegion: string;
+  headOfPuskesmasName: string; // Nama Kepala Puskesmas resmi
+  headOfPuskesmasNip: string; // NIP Kepala Puskesmas
   address: string;
   phone: string;
   nutritionistPhone: string; // Nomor WA Petugas Gizi

@@ -43,9 +43,9 @@ export function Sidebar({
   userRole,
   counts,
 }: SidebarProps) {
-  // If role is DOKTER_PERAWAT, only display 3 menus as requested:
+  // If role is DOKTER_PERAWAT, DOKTER, or PERAWAT, display 3 menus:
   // (dashboard, pasien rawat inap, order makanan pasien)
-  if (userRole === 'DOKTER_PERAWAT') {
+  if (userRole === 'DOKTER_PERAWAT' || userRole === 'DOKTER' || userRole === 'PERAWAT') {
     const doctorMenus = [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'patients', label: 'Pasien Rawat Inap', icon: Users },
@@ -141,6 +141,7 @@ export function Sidebar({
       items: [
         { id: 'billing', label: 'Rekap Tagihan', icon: Receipt, roles: ['ADMIN', 'AHLI_GIZI', 'PENYEDIA'] },
         { id: 'reports', label: 'Laporan Bulanan', icon: FileText, roles: ['ADMIN', 'AHLI_GIZI', 'PENYEDIA'] },
+        { id: 'user_management', label: 'Pengaturan Pengguna', icon: Users, roles: ['ADMIN'] },
         { id: 'master_menu_diet', label: 'Master Data', icon: BookOpen, roles: ['ADMIN', 'AHLI_GIZI'] },
         { id: 'audit_logs', label: 'Audit Log', icon: History, roles: ['ADMIN', 'AHLI_GIZI'] },
         { id: 'settings', label: 'Pengaturan & GAS', icon: Settings, roles: ['ADMIN'] },

@@ -124,7 +124,11 @@ export class DbStore {
         storedSettings ||
         storedRooms
       ) {
-        const users = storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS;
+        let users = storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS;
+        if (!Array.isArray(users) || users.length === 0 || !users.some((u: any) => u.role === 'DOKTER' || u.role === 'PERAWAT')) {
+          users = INITIAL_USERS;
+          localStorage.setItem(`${STORAGE_KEY_PREFIX}users`, JSON.stringify(INITIAL_USERS));
+        }
         const currentUser = storedCurrentUser ? JSON.parse(storedCurrentUser) : INITIAL_USERS[3];
         const parsedSettings = storedSettings ? JSON.parse(storedSettings) : this.state.settings;
         let loadedRooms = storedRooms ? JSON.parse(storedRooms) : INITIAL_ROOMS;
@@ -183,6 +187,8 @@ export class DbStore {
             ...INITIAL_APP_SETTINGS,
             ...this.state.settings,
             ...parsedSettings,
+            headOfPuskesmasName: parsedSettings?.headOfPuskesmasName || INITIAL_APP_SETTINGS.headOfPuskesmasName,
+            headOfPuskesmasNip: parsedSettings?.headOfPuskesmasNip || INITIAL_APP_SETTINGS.headOfPuskesmasNip,
             dkiLogoUrl: parsedSettings?.dkiLogoUrl || this.state.settings?.dkiLogoUrl || INITIAL_APP_SETTINGS.dkiLogoUrl,
             kemenkesLogoUrl: parsedSettings?.kemenkesLogoUrl || this.state.settings?.kemenkesLogoUrl || INITIAL_APP_SETTINGS.kemenkesLogoUrl,
           },
@@ -337,6 +343,72 @@ export class DbStore {
 
   public getUsers(): UserProfile[] {
     return [...this.state.users];
+  }
+
+  public addUser(userData: {
+    name: string;
+    nipOrNik: string;
+    role: UserRole;
+    email: string;
+    username?: string;
+    password?: string;
+    status?: 'ACTIVE' | 'INACTIVE';
+    phoneNumber?: string;
+    unitOrWard?: string;
+    providerId?: string;
+  }): { success: boolean; message: string; user?: UserProfile } {
+    const id = `USR-${Date.now().toString().slice(-4)}`;
+    const newUser: UserProfile = {
+      id,
+      name: userData.name.trim(),
+      nipOrNik: userData.nipOrNik.trim(),
+      role: userData.role,
+      email: userData.email.trim(),
+      username: userData.username?.trim() || userData.email.split('@')[0],
+      password: userData.password || 'password123',
+      status: userData.status || 'ACTIVE',
+      phoneNumber: userData.phoneNumber?.trim() || '',
+      unitOrWard: userData.unitOrWard?.trim() || '',
+      providerId: userData.providerId,
+    };
+    this.state.users.push(newUser);
+    this.logAudit('CREATE_USER', 'Manajemen Pengguna', newUser.id, `Pengguna baru ${newUser.name} (${newUser.role}) ditambahkan`);
+    this.saveState();
+    return { success: true, message: `Pengguna ${newUser.name} berhasil ditambahkan`, user: newUser };
+  }
+
+  public updateUser(id: string, updates: Partial<UserProfile>): { success: boolean; message: string; user?: UserProfile } {
+    const userIndex = this.state.users.findIndex((u) => u.id === id);
+    if (userIndex === -1) return { success: false, message: 'Pengguna tidak ditemukan' };
+    this.state.users[userIndex] = { ...this.state.users[userIndex], ...updates };
+    if (this.state.currentUser.id === id) {
+      this.state.currentUser = { ...this.state.currentUser, ...updates };
+    }
+    this.logAudit('UPDATE_USER', 'Manajemen Pengguna', id, `Data pengguna ${this.state.users[userIndex].name} diperbarui`);
+    this.saveState();
+    return { success: true, message: `Data pengguna berhasil diperbarui`, user: this.state.users[userIndex] };
+  }
+
+  public deleteUser(id: string): { success: boolean; message: string } {
+    if (this.state.currentUser.id === id) {
+      return { success: false, message: 'Tidak dapat menghapus akun yang sedang aktif digunakan login.' };
+    }
+    const target = this.state.users.find((u) => u.id === id);
+    if (!target) return { success: false, message: 'Pengguna tidak ditemukan.' };
+    this.state.users = this.state.users.filter((u) => u.id !== id);
+    this.logAudit('DELETE_USER', 'Manajemen Pengguna', id, `Pengguna ${target.name} (${target.role}) dihapus`);
+    this.saveState();
+    return { success: true, message: `Pengguna ${target.name} berhasil dihapus.` };
+  }
+
+  public resetUserPassword(id: string, newPassword?: string): { success: boolean; message: string; password?: string } {
+    const user = this.state.users.find((u) => u.id === id);
+    if (!user) return { success: false, message: 'Pengguna tidak ditemukan' };
+    const generatedPassword = newPassword && newPassword.trim() ? newPassword.trim() : `gizi${Math.floor(1000 + Math.random() * 9000)}`;
+    user.password = generatedPassword;
+    this.logAudit('RESET_PASSWORD', 'Manajemen Pengguna', id, `Password pengguna ${user.name} direset`);
+    this.saveState();
+    return { success: true, message: `Password pengguna ${user.name} berhasil direset`, password: generatedPassword };
   }
 
   // --- Audit Logging ---
@@ -553,6 +625,123 @@ export class DbStore {
 
   public getProviders(): Provider[] {
     return [...this.state.providers];
+  }
+
+  // --- CRUD: Kamar & Tempat Tidur ---
+  public addRoom(roomData: { room: string; bed: string; type?: string }): { success: boolean; message: string; room?: any } {
+    const id = `RM-${Date.now().toString().slice(-4)}`;
+    const newRoom = {
+      id,
+      room: roomData.room.trim(),
+      bed: roomData.bed.trim(),
+      type: roomData.type?.trim() || 'Ruang Rawat Inap',
+    };
+    this.state.rooms.push(newRoom);
+    this.logAudit('CREATE_ROOM', 'Master Data Ruangan', id, `Kamar & bed ${newRoom.room} - ${newRoom.bed} ditambahkan`);
+    this.saveState();
+    return { success: true, message: `Ruangan ${newRoom.room} - ${newRoom.bed} berhasil ditambahkan`, room: newRoom };
+  }
+
+  public updateRoom(id: string, updates: { room?: string; bed?: string; type?: string }): { success: boolean; message: string } {
+    const idx = this.state.rooms.findIndex((r) => r.id === id);
+    if (idx === -1) return { success: false, message: 'Ruangan tidak ditemukan' };
+    this.state.rooms[idx] = { ...this.state.rooms[idx], ...updates };
+    this.logAudit('UPDATE_ROOM', 'Master Data Ruangan', id, `Ruangan ${this.state.rooms[idx].room} diperbarui`);
+    this.saveState();
+    return { success: true, message: 'Data ruangan berhasil diperbarui' };
+  }
+
+  public deleteRoom(id: string): { success: boolean; message: string } {
+    const target = this.state.rooms.find((r) => r.id === id);
+    if (!target) return { success: false, message: 'Ruangan tidak ditemukan' };
+    this.state.rooms = this.state.rooms.filter((r) => r.id !== id);
+    this.logAudit('DELETE_ROOM', 'Master Data Ruangan', id, `Ruangan ${target.room} - ${target.bed} dihapus`);
+    this.saveState();
+    return { success: true, message: `Ruangan ${target.room} - ${target.bed} berhasil dihapus` };
+  }
+
+  // --- CRUD: Jenis Diet ---
+  public addDietType(dietData: Omit<DietType, 'id'>): { success: boolean; message: string; diet?: DietType } {
+    const id = `DIET-${Date.now().toString().slice(-4)}`;
+    const newDiet: DietType = { id, ...dietData };
+    this.state.dietTypes.push(newDiet);
+    this.logAudit('CREATE_DIET', 'Master Data Diet', id, `Jenis diet baru ${newDiet.name} (${newDiet.code}) ditambahkan`);
+    this.saveState();
+    return { success: true, message: `Jenis diet ${newDiet.name} berhasil ditambahkan`, diet: newDiet };
+  }
+
+  public updateDietType(id: string, updates: Partial<DietType>): { success: boolean; message: string } {
+    const idx = this.state.dietTypes.findIndex((d) => d.id === id);
+    if (idx === -1) return { success: false, message: 'Jenis diet tidak ditemukan' };
+    this.state.dietTypes[idx] = { ...this.state.dietTypes[idx], ...updates };
+    this.logAudit('UPDATE_DIET', 'Master Data Diet', id, `Jenis diet ${this.state.dietTypes[idx].name} diperbarui`);
+    this.saveState();
+    return { success: true, message: 'Data jenis diet berhasil diperbarui' };
+  }
+
+  public deleteDietType(id: string): { success: boolean; message: string } {
+    const target = this.state.dietTypes.find((d) => d.id === id);
+    if (!target) return { success: false, message: 'Jenis diet tidak ditemukan' };
+    this.state.dietTypes = this.state.dietTypes.filter((d) => d.id !== id);
+    this.logAudit('DELETE_DIET', 'Master Data Diet', id, `Jenis diet ${target.name} dihapus`);
+    this.saveState();
+    return { success: true, message: `Jenis diet ${target.name} berhasil dihapus` };
+  }
+
+  // --- CRUD: Menu Makanan & Tarif ---
+  public addMenu(menuData: Omit<MenuItem, 'id'>): { success: boolean; message: string; menu?: MenuItem } {
+    const id = `MN-${Date.now().toString().slice(-4)}`;
+    const newMenu: MenuItem = { id, ...menuData };
+    this.state.menus.push(newMenu);
+    this.logAudit('CREATE_MENU', 'Master Data Menu', id, `Menu baru ${newMenu.name} (Rp ${newMenu.pricePerPortion}) ditambahkan`);
+    this.saveState();
+    return { success: true, message: `Menu ${newMenu.name} berhasil ditambahkan`, menu: newMenu };
+  }
+
+  public updateMenu(id: string, updates: Partial<MenuItem>): { success: boolean; message: string } {
+    const idx = this.state.menus.findIndex((m) => m.id === id);
+    if (idx === -1) return { success: false, message: 'Menu tidak ditemukan' };
+    this.state.menus[idx] = { ...this.state.menus[idx], ...updates };
+    this.logAudit('UPDATE_MENU', 'Master Data Menu', id, `Menu ${this.state.menus[idx].name} diperbarui`);
+    this.saveState();
+    return { success: true, message: 'Data menu makanan berhasil diperbarui' };
+  }
+
+  public deleteMenu(id: string): { success: boolean; message: string } {
+    const target = this.state.menus.find((m) => m.id === id);
+    if (!target) return { success: false, message: 'Menu tidak ditemukan' };
+    this.state.menus = this.state.menus.filter((m) => m.id !== id);
+    this.logAudit('DELETE_MENU', 'Master Data Menu', id, `Menu ${target.name} dihapus`);
+    this.saveState();
+    return { success: true, message: `Menu ${target.name} berhasil dihapus` };
+  }
+
+  // --- CRUD: Rekanan Penyedia ---
+  public addProvider(provData: Omit<Provider, 'id'>): { success: boolean; message: string; provider?: Provider } {
+    const id = `PROV-${Date.now().toString().slice(-4)}`;
+    const newProv: Provider = { id, ...provData };
+    this.state.providers.push(newProv);
+    this.logAudit('CREATE_PROVIDER', 'Master Data Penyedia', id, `Penyedia baru ${newProv.name} (${newProv.code}) ditambahkan`);
+    this.saveState();
+    return { success: true, message: `Penyedia ${newProv.name} berhasil ditambahkan`, provider: newProv };
+  }
+
+  public updateProvider(id: string, updates: Partial<Provider>): { success: boolean; message: string } {
+    const idx = this.state.providers.findIndex((p) => p.id === id);
+    if (idx === -1) return { success: false, message: 'Penyedia tidak ditemukan' };
+    this.state.providers[idx] = { ...this.state.providers[idx], ...updates };
+    this.logAudit('UPDATE_PROVIDER', 'Master Data Penyedia', id, `Penyedia ${this.state.providers[idx].name} diperbarui`);
+    this.saveState();
+    return { success: true, message: 'Data penyedia berhasil diperbarui' };
+  }
+
+  public deleteProvider(id: string): { success: boolean; message: string } {
+    const target = this.state.providers.find((p) => p.id === id);
+    if (!target) return { success: false, message: 'Penyedia tidak ditemukan' };
+    this.state.providers = this.state.providers.filter((p) => p.id !== id);
+    this.logAudit('DELETE_PROVIDER', 'Master Data Penyedia', id, `Penyedia ${target.name} dihapus`);
+    this.saveState();
+    return { success: true, message: `Penyedia ${target.name} berhasil dihapus` };
   }
 
   public getSettings(): AppSettings {

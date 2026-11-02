@@ -19,6 +19,7 @@ import { MasterDataModule } from '@/components/modules/MasterDataModule';
 import { AuditLogModule } from '@/components/modules/AuditLogModule';
 import { GasSettingsModule } from '@/components/modules/GasSettingsModule';
 import { OfflineIndicator } from '@/components/common/OfflineIndicator';
+import { FloatingChatbot } from '@/components/chatbot/FloatingChatbot';
 import { UserProfile } from '@/types/nutrition';
 
 export default function HomePage() {
@@ -156,6 +157,7 @@ export default function HomePage() {
       <>
         <OfflineIndicator />
         <LandingPage onLoginAsUser={handleLoginAsUser} />
+        <FloatingChatbot />
       </>
     );
   }
@@ -208,6 +210,9 @@ export default function HomePage() {
           </footer>
         </main>
       </div>
+
+      {/* Floating AI Chatbot Assistant */}
+      <FloatingChatbot />
     </div>
   );
 }

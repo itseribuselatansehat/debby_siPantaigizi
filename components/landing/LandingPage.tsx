@@ -22,6 +22,11 @@ import {
   Activity,
   Layers,
   ChevronDown,
+  Eye,
+  EyeOff,
+  UserCheck,
+  KeyRound,
+  AlertCircle,
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -33,10 +38,11 @@ export function LandingPage({ onLoginAsUser }: LandingPageProps) {
   const allUsers = db.getUsers();
   const settings = db.getSettings();
 
+  const [activeLoginMode, setActiveLoginMode] = useState<'QUICK_OPERATIONAL' | 'MANUAL_ADMIN_NUTR'>('QUICK_OPERATIONAL');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('ALL');
-  const [showManualLogin, setShowManualLogin] = useState(false);
-  const [manualEmail, setManualEmail] = useState('');
+  const [manualIdentifier, setManualIdentifier] = useState('');
   const [manualPassword, setManualPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [manualError, setManualError] = useState('');
 
   const roleMeta: Record<
@@ -139,20 +145,49 @@ export function LandingPage({ onLoginAsUser }: LandingPageProps) {
   const handleManualLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setManualError('');
-    const user = allUsers.find(
-      (u) => u.email.toLowerCase() === manualEmail.trim().toLowerCase()
-    );
-    if (!user) {
-      setManualError('Email tidak terdaftar pada sistem demo.');
+
+    const query = manualIdentifier.trim().toLowerCase();
+    if (!query) {
+      setManualError('Silakan masukkan username atau email petugas.');
       return;
     }
+
+    const user = allUsers.find(
+      (u) =>
+        u.email.toLowerCase() === query ||
+        (u.username && u.username.toLowerCase() === query) ||
+        u.nipOrNik === query
+    );
+
+    if (!user) {
+      setManualError('Akun petugas dengan email atau username tersebut tidak ditemukan.');
+      return;
+    }
+
+    if (user.status === 'INACTIVE') {
+      setManualError('Akun ini sedang dinonaktifkan oleh Administrator.');
+      return;
+    }
+
+    const expectedPassword = user.password || 'password123';
+    if (manualPassword !== expectedPassword) {
+      setManualError('Kata sandi yang Anda masukkan tidak sesuai.');
+      return;
+    }
+
     onLoginAsUser(user);
   };
 
-  const filteredUsers =
+  // Hanya peran operasional yang diizinkan untuk 1-klik login cepat:
+  // Dokter, Perawat, Penyedia Katering, dan PJLP / Pramusaji.
+  // Akun ADMIN dan AHLI_GIZI disembunyikan dan diwajibkan menggunakan login manual kredensial.
+  const OPERATIONAL_ROLES: UserRole[] = ['DOKTER', 'PERAWAT', 'DOKTER_PERAWAT', 'PENYEDIA', 'PJLP_PRAMUSAJI'];
+  const operationalUsers = allUsers.filter((u) => OPERATIONAL_ROLES.includes(u.role));
+
+  const filteredOperationalUsers =
     selectedRoleFilter === 'ALL'
-      ? allUsers
-      : allUsers.filter((u) => {
+      ? operationalUsers
+      : operationalUsers.filter((u) => {
           if (selectedRoleFilter === 'DOKTER') return u.role === 'DOKTER' || u.role === 'DOKTER_PERAWAT';
           if (selectedRoleFilter === 'PERAWAT') return u.role === 'PERAWAT' || u.role === 'DOKTER_PERAWAT';
           return u.role === selectedRoleFilter;
@@ -373,220 +408,288 @@ export function LandingPage({ onLoginAsUser }: LandingPageProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
           <div className="text-center max-w-3xl mx-auto space-y-2">
             <span className="text-xs font-bold uppercase tracking-wider text-teal-800 bg-teal-50 border border-teal-200 px-3 py-1 rounded-full">
-              One-Click Instant Access
+              Portal Akses Petugas
             </span>
             <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-              Pilih Akun Petugas untuk Masuk
+              Pilih Akun Petugas Masuk
             </h2>
             <p className="text-xs sm:text-sm text-slate-600">
-              Sistem telah menyiapkan masing-masing profil pengguna. Anda cukup menekan tombol login
-              pada kartu yang sesuai dengan peran Anda untuk langsung menguji alur kerja SOP rawat inap.
+              Untuk kelancaran operasional harian, petugas pelaksana (Dokter, Perawat, Penyedia Makanan, dan Pramusaji) dapat masuk langsung dengan 1-klik. Akun <strong>Administrator</strong> dan <strong>Ahli Gizi</strong> disembunyikan dan diwajibkan menggunakan login manual dengan kata sandi.
             </p>
           </div>
 
-          {/* Role Filter Tabs */}
-          <div className="flex flex-wrap items-center justify-center gap-2">
+          {/* Mode Switcher Tabs */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 p-1.5 bg-slate-200/90 rounded-2xl max-w-xl mx-auto border border-slate-300">
             <button
               type="button"
-              onClick={() => setSelectedRoleFilter('ALL')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                selectedRoleFilter === 'ALL'
-                  ? 'bg-teal-800 text-white shadow-sm'
-                  : 'bg-white text-slate-600 hover:bg-slate-200'
+              onClick={() => setActiveLoginMode('QUICK_OPERATIONAL')}
+              className={`w-full sm:w-1/2 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                activeLoginMode === 'QUICK_OPERATIONAL'
+                  ? 'bg-teal-800 text-white shadow-md'
+                  : 'text-slate-700 hover:text-slate-900 hover:bg-white/60'
               }`}
             >
-              Semua Akun ({allUsers.length})
+              <UserCheck className="w-4 h-4" />
+              <span>Akses Cepat Petugas Pelaksana ({operationalUsers.length})</span>
             </button>
             <button
               type="button"
-              onClick={() => setSelectedRoleFilter('DOKTER')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                selectedRoleFilter === 'DOKTER'
-                  ? 'bg-blue-700 text-white shadow-sm'
-                  : 'bg-white text-slate-600 hover:bg-slate-200'
+              onClick={() => setActiveLoginMode('MANUAL_ADMIN_NUTR')}
+              className={`w-full sm:w-1/2 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                activeLoginMode === 'MANUAL_ADMIN_NUTR'
+                  ? 'bg-indigo-900 text-white shadow-md'
+                  : 'text-slate-700 hover:text-slate-900 hover:bg-white/60'
               }`}
             >
-              Dokter
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedRoleFilter('PERAWAT')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                selectedRoleFilter === 'PERAWAT'
-                  ? 'bg-sky-700 text-white shadow-sm'
-                  : 'bg-white text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Perawat
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedRoleFilter('AHLI_GIZI')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                selectedRoleFilter === 'AHLI_GIZI'
-                  ? 'bg-teal-700 text-white shadow-sm'
-                  : 'bg-white text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Ahli Gizi
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedRoleFilter('PENYEDIA')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                selectedRoleFilter === 'PENYEDIA'
-                  ? 'bg-amber-700 text-white shadow-sm'
-                  : 'bg-white text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Penyedia Katering
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedRoleFilter('PJLP_PRAMUSAJI')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                selectedRoleFilter === 'PJLP_PRAMUSAJI'
-                  ? 'bg-emerald-700 text-white shadow-sm'
-                  : 'bg-white text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              PJLP / Pramusaji
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedRoleFilter('ADMIN')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                selectedRoleFilter === 'ADMIN'
-                  ? 'bg-indigo-700 text-white shadow-sm'
-                  : 'bg-white text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Administrator
+              <Lock className="w-4 h-4 text-amber-400" />
+              <span>Login Manual (Admin &amp; Ahli Gizi)</span>
             </button>
           </div>
 
-          {/* User Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredUsers.map((user) => {
-              const meta = roleMeta[user.role];
-              const IconComp = meta?.icon || Activity;
-
-              return (
-                <div
-                  key={user.id}
-                  className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all p-5 flex flex-col justify-between group"
+          {activeLoginMode === 'QUICK_OPERATIONAL' ? (
+            <div className="space-y-6">
+              {/* Role Filter Tabs (Hanya Peran Pelaksana Operasional) */}
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRoleFilter('ALL')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    selectedRoleFilter === 'ALL'
+                      ? 'bg-teal-800 text-white shadow-sm'
+                      : 'bg-white text-slate-600 hover:bg-slate-200'
+                  }`}
                 >
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 flex items-center justify-center font-bold text-sm shrink-0">
-                          <IconComp className="w-5 h-5 text-teal-700" />
+                  Semua Pelaksana ({operationalUsers.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRoleFilter('DOKTER')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    selectedRoleFilter === 'DOKTER'
+                      ? 'bg-blue-700 text-white shadow-sm'
+                      : 'bg-white text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Dokter
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRoleFilter('PERAWAT')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    selectedRoleFilter === 'PERAWAT'
+                      ? 'bg-sky-700 text-white shadow-sm'
+                      : 'bg-white text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Perawat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRoleFilter('PENYEDIA')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    selectedRoleFilter === 'PENYEDIA'
+                      ? 'bg-amber-700 text-white shadow-sm'
+                      : 'bg-white text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Penyedia Katering
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRoleFilter('PJLP_PRAMUSAJI')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    selectedRoleFilter === 'PJLP_PRAMUSAJI'
+                      ? 'bg-emerald-700 text-white shadow-sm'
+                      : 'bg-white text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  PJLP / Pramusaji
+                </button>
+              </div>
+
+              {/* User Cards Grid (Admin dan Ahli Gizi TIDAK TAMPIL DI SINI) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filteredOperationalUsers.map((user) => {
+                  const meta = roleMeta[user.role];
+                  const IconComp = meta?.icon || Activity;
+
+                  return (
+                    <div
+                      key={user.id}
+                      className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all p-5 flex flex-col justify-between group"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 flex items-center justify-center font-bold text-sm shrink-0">
+                              <IconComp className="w-5 h-5 text-teal-700" />
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-slate-900 text-sm leading-tight group-hover:text-teal-800 transition">
+                                {user.name}
+                              </h3>
+                              <p className="text-[11px] text-slate-500 font-mono">
+                                NIP/NIK: {user.nipOrNik}
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${meta?.bgBadge}`}>
+                            {meta?.title}
+                          </span>
                         </div>
-                        <div>
-                          <h3 className="font-bold text-slate-900 text-sm leading-tight group-hover:text-teal-800 transition">
-                            {user.name}
-                          </h3>
-                          <p className="text-[11px] text-slate-500 font-mono">
-                            NIP/NIK: {user.nipOrNik}
+
+                        <div className="p-3 bg-slate-50 rounded-xl text-xs space-y-1.5 border border-slate-100">
+                          <p className="font-semibold text-slate-700 text-[11px]">
+                            Unit: <span className="font-normal text-slate-600">{user.unitOrWard}</span>
+                          </p>
+                          <p className="text-[11px] text-slate-600 leading-snug">
+                            {meta?.description}
                           </p>
                         </div>
-                      </div>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${meta?.bgBadge}`}>
-                        {meta?.title}
-                      </span>
-                    </div>
 
-                    <div className="p-3 bg-slate-50 rounded-xl text-xs space-y-1.5 border border-slate-100">
-                      <p className="font-semibold text-slate-700 text-[11px]">
-                        Unit: <span className="font-normal text-slate-600">{user.unitOrWard}</span>
-                      </p>
-                      <p className="text-[11px] text-slate-600 leading-snug">
-                        {meta?.description}
-                      </p>
-                    </div>
-
-                    <div className="space-y-1 text-[11px] text-slate-600">
-                      <p className="font-bold text-slate-800 text-[10px] uppercase tracking-wide">
-                        Fitur Utama Peran:
-                      </p>
-                      {meta?.responsibilities.map((resp, i) => (
-                        <div key={i} className="flex items-start gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
-                          <span>{resp}</span>
+                        <div className="space-y-1 text-[11px] text-slate-600">
+                          <p className="font-bold text-slate-800 text-[10px] uppercase tracking-wide">
+                            Fitur Utama Peran:
+                          </p>
+                          {meta?.responsibilities.map((resp, i) => (
+                            <div key={i} className="flex items-start gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
+                              <span>{resp}</span>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      </div>
+
+                      <div className="pt-5 mt-4 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => onLoginAsUser(user)}
+                          className="w-full py-2.5 px-4 rounded-xl bg-teal-800 hover:bg-teal-900 active:scale-98 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all"
+                        >
+                          <span>Masuk sebagai {user.name.split(',')[0]}</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
+                  );
+                })}
+              </div>
+
+              {/* Informative Security Callout for Admin & Ahli Gizi */}
+              <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center shrink-0">
+                    <Lock className="w-5 h-5 text-amber-700" />
                   </div>
-
-                  <div className="pt-5 mt-4 border-t border-slate-100">
-                    <button
-                      type="button"
-                      onClick={() => onLoginAsUser(user)}
-                      className="w-full py-2.5 px-4 rounded-xl bg-teal-800 hover:bg-teal-900 active:scale-98 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all"
-                    >
-                      <span>Masuk sebagai {user.name.split(',')[0]}</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">
+                      Mencari Akun Administrator atau Ahli Gizi?
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Pilihan login Administrator dan Ahli Gizi disembunyikan dari akses 1-klik demi keamanan integritas database dan verifikasi gizi klinis.
+                    </p>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Manual Login Accordion Fallback */}
-          <div className="max-w-md mx-auto text-center pt-4">
-            <button
-              type="button"
-              onClick={() => setShowManualLogin(!showManualLogin)}
-              className="text-xs text-slate-500 hover:text-slate-800 font-medium inline-flex items-center gap-1.5 transition"
-            >
-              <Lock className="w-3.5 h-3.5" />
-              <span>Ingin login dengan email & kata sandi manual?</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showManualLogin ? 'rotate-180' : ''}`} />
-            </button>
-
-            {showManualLogin && (
-              <form
-                onSubmit={handleManualLogin}
-                className="mt-4 p-5 bg-white rounded-2xl border border-slate-200 shadow-sm text-left text-xs space-y-3 animate-in fade-in-50"
-              >
-                <h4 className="font-bold text-slate-900 text-sm">Login Kredensial Manual</h4>
-                {manualError && (
-                  <p className="p-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-[11px]">
-                    {manualError}
-                  </p>
-                )}
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Email Petugas</label>
-                  <input
-                    type="email"
-                    value={manualEmail}
-                    onChange={(e) => setManualEmail(e.target.value)}
-                    placeholder="misal: farhan.dokter@puskesmas.id"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Kata Sandi</label>
-                  <input
-                    type="password"
-                    value={manualPassword}
-                    onChange={(e) => setManualPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-0.5">Untuk demo, kata sandi opsional.</p>
                 </div>
                 <button
-                  type="submit"
-                  className="w-full py-2 bg-teal-800 hover:bg-teal-900 text-white font-bold rounded-lg transition"
+                  type="button"
+                  onClick={() => setActiveLoginMode('MANUAL_ADMIN_NUTR')}
+                  className="px-4 py-2 rounded-xl bg-indigo-900 hover:bg-indigo-950 text-white text-xs font-bold shrink-0 flex items-center gap-2 shadow-sm transition-all"
                 >
-                  Masuk Sekarang
+                  <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Buka Form Login Manual</span>
                 </button>
-              </form>
-            )}
-          </div>
+              </div>
+            </div>
+          ) : (
+            /* Dedicated Manual Login for Administrator & Ahli Gizi */
+            <div className="max-w-2xl mx-auto space-y-6">
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
+                <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 text-white text-center space-y-2">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/40 text-amber-300 flex items-center justify-center mx-auto shadow-inner">
+                    <Lock className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-extrabold tracking-tight">
+                    Login Manual Khusus Admin &amp; Ahli Gizi
+                  </h3>
+                  <p className="text-xs text-indigo-200 max-w-md mx-auto">
+                    Masukkan kredensial resmi (Email / Username dan Kata Sandi) untuk mengakses menu pengaturan sistem, database GAS, verifikasi diet, dan billing gizi.
+                  </p>
+                </div>
+
+                <form onSubmit={handleManualLogin} className="p-6 sm:p-8 space-y-5">
+                  {manualError && (
+                    <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-start gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <span>{manualError}</span>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-800">
+                      Email atau Username Petugas
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={manualIdentifier}
+                        onChange={(e) => setManualIdentifier(e.target.value)}
+                        placeholder="Contoh: admin, ahligizi, atau email petugas"
+                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600 transition"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-bold text-slate-800">
+                        Kata Sandi Petugas
+                      </label>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        Kata sandi bawaan: password123
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={manualPassword}
+                        onChange={(e) => setManualPassword(e.target.value)}
+                        placeholder="Masukkan kata sandi..."
+                        className="w-full px-4 py-2.5 pr-10 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600 transition"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                        title={showPassword ? 'Sembunyikan sandi' : 'Tampilkan sandi'}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-900 to-teal-800 hover:from-indigo-800 hover:to-teal-700 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20 transition-all hover:scale-[1.01] active:scale-[0.99]"
+                  >
+                    <KeyRound className="w-4 h-4 text-amber-400" />
+                    <span>Verifikasi Kredensial &amp; Masuk</span>
+                  </button>
+                </form>
+              </div>
+
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setActiveLoginMode('QUICK_OPERATIONAL')}
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center gap-1.5 transition"
+                >
+                  <span>&larr; Kembali ke Pilihan Petugas Pelaksana (Dokter, Perawat, Penyedia, Pramusaji)</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

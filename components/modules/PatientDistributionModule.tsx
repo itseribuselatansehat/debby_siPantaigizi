@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import {
   printPatientDeliveryInNewTab,
+  printThermalEtiket80mm,
   formatDriveOrDirectImageUrl,
   DEFAULT_DKI_LOGO,
   DEFAULT_KEMENKES_LOGO,
@@ -507,23 +508,36 @@ export function PatientDistributionModule({ orders, onOrderUpdated }: PatientDis
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100 no-print">
-              <span className="text-[11px] text-slate-500">Ukuran: Standar Wadah Makanan Pasien</span>
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-center justify-between pt-3 border-t border-slate-100 no-print gap-2">
+              <span className="text-[11px] text-slate-500 font-medium">Format: Printer Thermal 80mm x 80mm</span>
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                 <button
                   type="button"
                   onClick={() => setOrderForEtiket(null)}
-                  className="px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg"
+                  className="px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-xs"
                 >
                   Tutup
                 </button>
                 <button
                   type="button"
+                  onClick={() => {
+                    if (orderForEtiket) {
+                      printThermalEtiket80mm(orderForEtiket, settings);
+                    }
+                  }}
+                  className="px-3.5 py-1.5 bg-slate-900 hover:bg-black text-white rounded-lg text-xs font-bold shadow-sm inline-flex items-center gap-1.5 transition-colors"
+                  title="Cetak stiker dengan ukuran thermal 80mm x 80mm"
+                >
+                  <Printer className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Cetak Thermal 80x80mm</span>
+                </button>
+                <button
+                  type="button"
                   onClick={handlePrintEtiket}
-                  className="px-4 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg font-bold shadow-sm inline-flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-bold shadow-sm inline-flex items-center gap-1.5 transition-colors"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  <span>Cetak Etiket Sekarang</span>
+                  <span>Cetak Biasa</span>
                 </button>
               </div>
             </div>

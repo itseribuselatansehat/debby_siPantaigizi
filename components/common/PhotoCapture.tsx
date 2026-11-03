@@ -53,6 +53,100 @@ export function PhotoCapture({
       : null
   );
 
+// Helper: Bubuhkan watermark timestamp resmi Puskesmas pada kanvas foto sebelum disimpan
+async function applyTimestampWatermark(imageSrc: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(imageSrc);
+          return;
+        }
+
+        canvas.width = img.width;
+        canvas.height = img.height;
+
+        // Gambar foto asli
+        ctx.drawImage(img, 0, 0);
+
+        // Skala proporsional ukuran watermark terhadap lebar foto
+        const scale = Math.max(1, canvas.width / 950);
+        const bannerHeight = Math.round(92 * scale);
+        const padding = Math.round(16 * scale);
+
+        // Banner transparan gelap di bagian bawah
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+        ctx.fillRect(0, canvas.height - bannerHeight, canvas.width, bannerHeight);
+
+        // Garis batas atas aksen tosca/teal
+        ctx.fillStyle = '#0d9488';
+        ctx.fillRect(0, canvas.height - bannerHeight, canvas.width, Math.round(3.5 * scale));
+
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('id-ID', {
+          day: '2-digit',
+          month: 'long',
+          year: 'numeric',
+        });
+        const timeStr = now.toLocaleTimeString('id-ID', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        });
+
+        // Baris 1: Header Instansi
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${Math.round(20 * scale)}px 'Plus Jakarta Sans', Arial, sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.fillText(
+          'PUSKESMAS KEPULAUAN SERIBU SELATAN · INSTALASI GIZI',
+          padding,
+          canvas.height - bannerHeight + Math.round(28 * scale)
+        );
+
+        // Baris 2: Subtitle SOP
+        ctx.fillStyle = '#99f6e4';
+        ctx.font = `600 ${Math.round(15 * scale)}px 'Plus Jakarta Sans', Arial, sans-serif`;
+        ctx.fillText(
+          'DOKUMENTASI SAJIAN MAKANAN PASIEN RAWAT INAP',
+          padding,
+          canvas.height - bannerHeight + Math.round(52 * scale)
+        );
+
+        // Baris 3: Timestamp & Lokasi Real-Time
+        ctx.fillStyle = '#fde047';
+        ctx.font = `bold ${Math.round(16 * scale)}px 'JetBrains Mono', monospace`;
+        ctx.fillText(
+          `TIMESTAMP: ${dateStr} ${timeStr} WIB · PKM KEP. SERIBU SELATAN`,
+          padding,
+          canvas.height - bannerHeight + Math.round(76 * scale)
+        );
+
+        // Label verifikasi di kanan bawah
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = `bold ${Math.round(14 * scale)}px 'JetBrains Mono', monospace`;
+        ctx.textAlign = 'right';
+        ctx.fillText(
+          'SI PANTAI GIZI [TERVALIDASI]',
+          canvas.width - padding,
+          canvas.height - bannerHeight + Math.round(52 * scale)
+        );
+
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
+      } catch (e) {
+        resolve(imageSrc);
+      }
+    };
+    img.onerror = () => resolve(imageSrc);
+    img.src = imageSrc;
+  });
+}
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -64,20 +158,22 @@ export function PhotoCapture({
 
     const reader = new FileReader();
     reader.onload = async (event) => {
-      const result = event.target?.result as string;
-      setPhotoUrl(result);
+      const rawResult = event.target?.result as string;
+      setIsUploading(true);
+      setDriveUploadStatus(null);
+
+      // Bubuhkan timestamp watermark otomatis
+      const watermarkedResult = await applyTimestampWatermark(rawResult);
+      setPhotoUrl(watermarkedResult);
       const now = new Date().toISOString();
       setCapturedAt(now);
 
       // Otomatis kirim dan simpan ke Google Drive Folder: 1xsrknKxLZVC-YryvoTCbavbUkEn4EwLk
-      setIsUploading(true);
-      setDriveUploadStatus(null);
-
       try {
         const driveRes = await uploadPhotoToDrive({
-          base64Data: result,
-          fileName: file.name || `foto_sajian_${Date.now()}.jpg`,
-          mimeType: file.type || 'image/jpeg',
+          base64Data: watermarkedResult,
+          fileName: file.name ? `watermarked_${file.name}` : `foto_sajian_${Date.now()}.jpg`,
+          mimeType: 'image/jpeg',
           folderId: TARGET_GOOGLE_DRIVE_FOLDER_ID,
         });
 
@@ -85,24 +181,22 @@ export function PhotoCapture({
           setDriveUploadStatus({
             success: true,
             fileUrl: driveRes.fileUrl,
-            message: `Foto berhasil disimpan ke Google Drive (Folder: ${TARGET_GOOGLE_DRIVE_FOLDER_ID})`,
+            message: `Foto bertanda waktu (timestamp) berhasil disimpan ke Google Drive (Folder: ${TARGET_GOOGLE_DRIVE_FOLDER_ID})`,
           });
-          // Gunakan tautan Google Drive sebagai URL permanen
           onPhotoSelected(driveRes.fileUrl);
         } else {
-          // Fallback ke data URL lokal jika GAS belum dikonfigurasi admin
           setDriveUploadStatus({
             success: false,
-            message: driveRes.message || 'Foto tersimpan lokal (konfigurasi GAS di akun Admin untuk sinkronisasi Google Drive).',
+            message: driveRes.message || 'Foto bertanda waktu tersimpan lokal (konfigurasi GAS di akun Admin untuk sinkronisasi Google Drive).',
           });
-          onPhotoSelected(result);
+          onPhotoSelected(watermarkedResult);
         }
       } catch (err: any) {
         setDriveUploadStatus({
           success: false,
           message: err?.message || 'Gagal terhubung ke Google Drive API. Foto tersimpan lokal.',
         });
-        onPhotoSelected(result);
+        onPhotoSelected(watermarkedResult);
       } finally {
         setIsUploading(false);
       }
@@ -245,7 +339,10 @@ export function PhotoCapture({
             </div>
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
-            <span>Waktu Dokumentasi:</span>
+            <span className="flex items-center gap-1 text-emerald-800 font-semibold">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              Watermark Timestamp &amp; Identitas Instansi Tersemat
+            </span>
             <span className="font-mono text-slate-700">{formatJakartaDateTime(capturedAt)}</span>
           </div>
         </div>
@@ -254,21 +351,37 @@ export function PhotoCapture({
           <div className="w-10 h-10 rounded-full bg-teal-50 text-teal-700 flex items-center justify-center mx-auto mb-2">
             <Camera className="w-5 h-5" />
           </div>
-          <p className="text-xs font-medium text-slate-700 mb-1">Ambil Foto dengan Kamera atau Unggah Berkas</p>
-          <p className="text-[11px] text-slate-400 mb-3">
-            Otomatis diunggah & disimpan ke Google Drive (Format JPG, PNG maks 10 MB)
+          <p className="text-xs font-bold text-slate-800 mb-0.5">Dokumentasi Foto Makanan Aktual Tersaji</p>
+          <p className="text-[11px] text-slate-500 mb-3 max-w-sm mx-auto">
+            Sistem otomatis membubuhkan watermark timestamp tanggal, jam WIB, dan identitas Puskesmas pada foto sebelum diunggah ke Google Drive
           </p>
-          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-medium rounded-lg cursor-pointer shadow-sm transition-colors">
-            <Upload className="w-3.5 h-3.5" />
-            <span>Pilih Berkas / Buka Kamera</span>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-          </label>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5">
+            {/* Opsi 1: Kamera Langsung */}
+            <label className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold rounded-lg cursor-pointer shadow-sm transition-colors">
+              <Camera className="w-4 h-4" />
+              <span>📷 Buka Kamera Langsung</span>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </label>
+
+            {/* Opsi 2: Upload Galeri / Berkas File */}
+            <label className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg cursor-pointer shadow-sm transition-colors">
+              <Upload className="w-4 h-4" />
+              <span>📁 Upload Foto (Galeri / Berkas)</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </label>
+          </div>
         </div>
       )}
     </div>

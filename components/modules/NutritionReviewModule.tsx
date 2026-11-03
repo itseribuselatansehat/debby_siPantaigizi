@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { MealOrder, MealSchedule, MenuItem } from '@/types/nutrition';
 import { DbStore } from '@/lib/db-store';
-import { formatJakartaDate, formatJakartaDateTime, formatRupiah } from '@/lib/date-utils';
+import { formatJakartaDate, formatJakartaDateTime, formatRupiah, cleanAndFormatWaPhone } from '@/lib/date-utils';
 import {
   CheckCircle,
   XCircle,
@@ -105,7 +105,10 @@ export function NutritionReviewModule({ orders, onOrderUpdated }: NutritionRevie
   };
 
   const handleSendWhatsAppToProvider = (order: MealOrder) => {
-    const phone = settings.providerPhone || '6281809123456';
+    const users = db.getUsers();
+    const activeProvider = users.find((u) => u.role === 'PENYEDIA' && u.status === 'ACTIVE' && u.phoneNumber) ||
+                           users.find((u) => u.role === 'PENYEDIA' && u.phoneNumber);
+    const phone = cleanAndFormatWaPhone(activeProvider?.phoneNumber || settings.providerPhone || '6281809123456');
     const message = generateWhatsAppMessageForProvider(order);
     const waUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank');
@@ -465,10 +468,21 @@ export function NutritionReviewModule({ orders, onOrderUpdated }: NutritionRevie
               </p>
             </div>
 
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1 text-slate-700">
-              <p>Penyedia Rekanan: <strong>{orderToShareWa.providerName || 'CV Berkah Bahari'}</strong></p>
-              <p>Jadwal: <strong>{orderToShareWa.selectedSchedules?.join(', ') || orderToShareWa.schedule}</strong></p>
-              <p>Total Nilai Kontrak: <strong className="font-mono text-teal-900">{formatRupiah(orderToShareWa.totalEstimatedPrice)}</strong></p>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1 text-slate-700 text-xs">
+              {(() => {
+                const users = db.getUsers();
+                const activeProv = users.find((u) => u.role === 'PENYEDIA' && u.status === 'ACTIVE' && u.phoneNumber) ||
+                                   users.find((u) => u.role === 'PENYEDIA' && u.phoneNumber);
+                const targetPhone = cleanAndFormatWaPhone(activeProv?.phoneNumber || settings.providerPhone || '6281809123456');
+                return (
+                  <>
+                    <p>Penyedia Rekanan: <strong>{activeProv?.name || orderToShareWa.providerName || 'CV Berkah Bahari'}</strong></p>
+                    <p>Nomor WA Terdaftar: <strong className="font-mono text-emerald-800">+{targetPhone}</strong></p>
+                    <p>Jadwal: <strong>{orderToShareWa.selectedSchedules?.join(', ') || orderToShareWa.schedule}</strong></p>
+                    <p>Total Nilai Kontrak: <strong className="font-mono text-teal-900">{formatRupiah(orderToShareWa.totalEstimatedPrice)}</strong></p>
+                  </>
+                );
+              })()}
             </div>
 
             <div className="space-y-2">

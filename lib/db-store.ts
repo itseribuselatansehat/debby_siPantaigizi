@@ -544,11 +544,28 @@ export class DbStore {
       const isServed = ['DELIVERED_TO_PATIENT', 'CONSUMPTION_RECORDED', 'COMPLETED'].includes(o.status);
       if (isServed) servedCount += (o.billedPortionCount || o.portionCount || 1);
 
-      if (o.schedule === 'SARAPAN') sarapanCount += (o.portionCount || 1);
-      else if (o.schedule === 'SIANG') siangCount += (o.portionCount || 1);
-      else if (o.schedule === 'MALAM') malamCount += (o.portionCount || 1);
+      const schedules = (o.selectedSchedules && o.selectedSchedules.length > 0)
+        ? o.selectedSchedules
+        : (o.schedule ? [o.schedule] : ['SIANG']);
 
-      totalCost += (o.finalBilledAmount || o.totalEstimatedPrice || 0);
+      const portion = o.billedPortionCount || o.portionCount || 1;
+      let orderCost = 0;
+      schedules.forEach((sch) => {
+        if (sch === 'SARAPAN') {
+          sarapanCount += portion;
+          orderCost += 25000 * portion;
+        } else if (sch === 'SIANG') {
+          siangCount += portion;
+          orderCost += 47000 * portion;
+        } else if (sch === 'MALAM') {
+          malamCount += portion;
+          orderCost += 47000 * portion;
+        } else {
+          orderCost += 25000 * portion;
+        }
+      });
+
+      totalCost += (o.finalBilledAmount && o.finalBilledAmount > 0) ? o.finalBilledAmount : (o.totalEstimatedPrice || orderCost);
 
       if (o.leftoverAssessment && o.leftoverAssessment.consumptionPercentage !== undefined) {
         comstockSum += o.leftoverAssessment.consumptionPercentage;
@@ -1016,13 +1033,13 @@ export class DbStore {
       order.selectedSchedules = schedules;
       order.schedule = schedules[0]; // primary schedule
 
-      // Standard tariff pricing: Sarapan 25.000, Siang 45.000, Malam 45.000
+      // Standard tariff pricing: Sarapan 25.000, Siang 47.000, Malam 47.000
       let unitPriceSum = 0;
       schedules.forEach((sch) => {
         if (sch === 'SARAPAN') unitPriceSum += 25000;
-        else if (sch === 'SIANG') unitPriceSum += 45000;
-        else if (sch === 'MALAM') unitPriceSum += 45000;
-        else unitPriceSum += 15000;
+        else if (sch === 'SIANG') unitPriceSum += 47000;
+        else if (sch === 'MALAM') unitPriceSum += 47000;
+        else unitPriceSum += 25000;
       });
 
       if (params.menuId) {

@@ -96,3 +96,23 @@ export function formatRupiah(amount: number | undefined | null): string {
   const val = Math.round(amount);
   return 'Rp ' + val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
+
+/**
+ * Normalisasi nomor WhatsApp ke standar internasional Indonesia (62xxx)
+ * Contoh: 0812-3456-7890 -> 6281234567890
+ */
+export function cleanAndFormatWaPhone(phone?: string, fallback: string = ''): string {
+  if (!phone || typeof phone !== 'string') return fallback;
+  // Hapus semua karakter non-angka
+  let cleaned = phone.replace(/[^0-9]/g, '');
+  if (!cleaned) return fallback;
+
+  // Jika diawali 08..., ubah menjadi 628...
+  if (cleaned.startsWith('08')) {
+    cleaned = '62' + cleaned.substring(1);
+  } else if (cleaned.startsWith('8')) {
+    cleaned = '62' + cleaned;
+  }
+  return cleaned;
+}
+

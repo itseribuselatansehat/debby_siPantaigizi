@@ -33,15 +33,42 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
   const dkiLogo = formatDriveOrDirectImageUrl(settings.dkiLogoUrl) || DEFAULT_DKI_LOGO;
   const kemenkesLogo = formatDriveOrDirectImageUrl(settings.kemenkesLogoUrl) || DEFAULT_KEMENKES_LOGO;
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterMonth, setFilterMonth] = useState('2026-10');
+  const [filterMonth, setFilterMonth] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [selectedOrderForAdjust, setSelectedOrderForAdjust] = useState<MealOrder | null>(null);
   const [adjustedPortions, setAdjustedPortions] = useState(1);
   const [adjustNotes, setAdjustNotes] = useState('');
 
+  // Official tariff helper: Sarapan 25k, Siang 47k, Malam 47k
+  const getOrderPricing = (order: MealOrder) => {
+    const schedules = (order.selectedSchedules && order.selectedSchedules.length > 0)
+      ? order.selectedSchedules
+      : (order.schedule ? [order.schedule] : ['SIANG']);
+
+    let tariffUnit = 0;
+    for (const s of schedules) {
+      if (s === 'SARAPAN') tariffUnit += 25000;
+      else if (s === 'SIANG') tariffUnit += 47000;
+      else if (s === 'MALAM') tariffUnit += 47000;
+      else tariffUnit += 25000;
+    }
+
+    const unitPrice = order.pricePerPortionSnapshot && order.pricePerPortionSnapshot > 0
+      ? order.pricePerPortionSnapshot
+      : tariffUnit;
+
+    const portions = order.billedPortionCount || order.portionCount || 1;
+    const subtotal = order.finalBilledAmount && order.finalBilledAmount > 0
+      ? order.finalBilledAmount
+      : (unitPrice * portions);
+
+    return { unitPrice, portions, subtotal };
+  };
+
   // Billable orders (orders that reached delivery, consumption, or completed)
   const billableOrders = orders.filter((o) => {
-    const isServiceInMonth = o.serviceDate.startsWith(filterMonth);
+    if (o.status === 'CANCELLED' || o.status === 'REJECTED') return false;
+    const isServiceInMonth = filterMonth === 'ALL' || o.serviceDate.startsWith(filterMonth);
     const matchesSearch =
       o.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       o.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -53,13 +80,13 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
     return isServiceInMonth && matchesSearch && matchesStatus;
   });
 
-  const totalBillableAmount = billableOrders.reduce((sum, o) => sum + (o.finalBilledAmount || 0), 0);
+  const totalBillableAmount = billableOrders.reduce((sum, o) => sum + getOrderPricing(o).subtotal, 0);
   const totalVerifiedAmount = billableOrders
     .filter((o) => o.billingStatus === 'TERVERIFIKASI' || o.status === 'COMPLETED')
-    .reduce((sum, o) => sum + (o.finalBilledAmount || 0), 0);
+    .reduce((sum, o) => sum + getOrderPricing(o).subtotal, 0);
   const totalPendingAmount = billableOrders
-    .filter((o) => o.billingStatus === 'MENUNGGU_VERIFIKASI' || o.billingStatus === 'BELUM_DIREKAP')
-    .reduce((sum, o) => sum + (o.finalBilledAmount || 0), 0);
+    .filter((o) => o.billingStatus === 'MENUNGGU_VERIFIKASI' || o.billingStatus === 'BELUM_DIREKAP' || !o.billingStatus)
+    .reduce((sum, o) => sum + getOrderPricing(o).subtotal, 0);
 
   const handleOpenAdjust = (order: MealOrder) => {
     setSelectedOrderForAdjust(order);
@@ -118,22 +145,26 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
       'Catatan Koreksi',
     ];
 
-    const rows = billableOrders.map((o) => [
-      `"${o.orderNumber}"`,
-      `"${formatJakartaDate(o.serviceDate)}"`,
-      `"${o.schedule}"`,
-      `"${o.providerName || '-'}"`,
-      `"${o.patientName}"`,
-      `"${o.patientMrn}"`,
-      `"${o.menuName}"`,
-      `"${o.dietTypeName} (${o.texture})"`,
-      o.portionCount,
-      o.billedPortionCount,
-      o.pricePerPortionSnapshot,
-      o.finalBilledAmount,
-      `"${o.billingStatus}"`,
-      `"${o.billingNotes || '-'}"`,
-    ]);
+    const rows = billableOrders.map((o) => {
+      const pricing = getOrderPricing(o);
+      const schedules = o.selectedSchedules?.join(', ') || o.schedule;
+      return [
+        `"${o.orderNumber}"`,
+        `"${formatJakartaDate(o.serviceDate)}"`,
+        `"${schedules}"`,
+        `"${o.providerName || '-'}"`,
+        `"${o.patientName}"`,
+        `"${o.patientMrn}"`,
+        `"${o.menuName || o.dietTypeName || '-'}"`,
+        `"${o.dietTypeName} (${o.texture})"`,
+        o.portionCount,
+        pricing.portions,
+        pricing.unitPrice,
+        pricing.subtotal,
+        `"${o.billingStatus || 'MENUNGGU_VERIFIKASI'}"`,
+        `"${o.billingNotes || '-'}"`,
+      ];
+    });
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -228,12 +259,29 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <input
-            type="month"
-            value={filterMonth}
-            onChange={(e) => setFilterMonth(e.target.value)}
-            className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg text-slate-700 font-mono"
-          />
+          <select
+            value={filterMonth === 'ALL' ? 'ALL' : 'CUSTOM'}
+            onChange={(e) => {
+              if (e.target.value === 'ALL') {
+                setFilterMonth('ALL');
+              } else {
+                setFilterMonth(new Date().toISOString().slice(0, 7));
+              }
+            }}
+            className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg text-slate-700 bg-white"
+          >
+            <option value="ALL">Semua Periode (Semua Transaksi)</option>
+            <option value="CUSTOM">Pilih Bulan Tertentu</option>
+          </select>
+
+          {filterMonth !== 'ALL' && (
+            <input
+              type="month"
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(e.target.value)}
+              className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg text-slate-700 font-mono"
+            />
+          )}
 
           <select
             value={filterStatus}
@@ -318,64 +366,71 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
                   </td>
                 </tr>
               ) : (
-                billableOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-2 px-3 font-mono text-slate-700">
-                      {formatJakartaDate(order.serviceDate)}
-                    </td>
-                    <td className="py-2 px-3 font-mono font-semibold text-teal-800">
-                      {order.orderNumber}
-                    </td>
-                    <td className="py-2 px-3">
-                      <strong className="text-slate-900 block">{order.patientName}</strong>
-                      <span className="text-[10px] text-slate-500 font-mono">{order.room} ({order.bed})</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-semibold text-slate-800 block truncate max-w-[150px]">
-                        {order.menuName || order.dietTypeName || 'Menu Standar'}
-                      </span>
-                      <span className="text-[10px] text-slate-500">{order.schedule} · {order.texture}</span>
-                    </td>
-                    <td className="py-2 px-3 text-right font-mono font-bold text-slate-800">
-                      {order.billedPortionCount || order.portionCount}
-                    </td>
-                    <td className="py-2 px-3 text-right font-mono text-slate-600">
-                      {formatRupiah(order.pricePerPortionSnapshot)}
-                    </td>
-                    <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                      {formatRupiah(order.finalBilledAmount || order.totalEstimatedPrice)}
-                    </td>
-                    <td className="py-2 px-3">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                          order.billingStatus === 'TERVERIFIKASI'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : order.billingStatus === 'MENUNGGU_VERIFIKASI'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        {order.billingStatus}
-                      </span>
-                      {order.billingNotes && (
-                        <p className="text-[10px] text-slate-500 mt-0.5 italic truncate max-w-[120px]">
-                          {order.billingNotes}
-                        </p>
-                      )}
-                    </td>
-                    <td className="py-2 px-3 text-right no-print">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenAdjust(order)}
-                        className="px-2 py-1 text-slate-600 hover:text-teal-800 hover:bg-slate-100 rounded text-xs inline-flex items-center gap-1 transition-colors"
-                        title="Koreksi Porsi / Catatan Penagihan"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        <span>Koreksi</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                billableOrders.map((order) => {
+                  const pricing = getOrderPricing(order);
+                  const displaySchedules = order.selectedSchedules && order.selectedSchedules.length > 0
+                    ? order.selectedSchedules.map((s) => s === 'SARAPAN' ? 'Sarapan (25k)' : s === 'SIANG' ? 'Siang (47k)' : 'Malam (47k)').join(', ')
+                    : (order.schedule === 'SARAPAN' ? 'Sarapan (25k)' : order.schedule === 'SIANG' ? 'Siang (47k)' : 'Malam (47k)');
+
+                  return (
+                    <tr key={order.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-2 px-3 font-mono text-slate-700">
+                        {formatJakartaDate(order.serviceDate)}
+                      </td>
+                      <td className="py-2 px-3 font-mono font-semibold text-teal-800">
+                        {order.orderNumber}
+                      </td>
+                      <td className="py-2 px-3">
+                        <strong className="text-slate-900 block">{order.patientName}</strong>
+                        <span className="text-[10px] text-slate-500 font-mono">{order.room} ({order.bed})</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-semibold text-slate-800 block truncate max-w-[150px]">
+                          {order.menuName || order.dietTypeName || 'Menu Standar'}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-medium">{displaySchedules} · {order.texture}</span>
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-slate-800">
+                        {pricing.portions}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono text-slate-600">
+                        {formatRupiah(pricing.unitPrice)}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                        {formatRupiah(pricing.subtotal)}
+                      </td>
+                      <td className="py-2 px-3">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                            order.billingStatus === 'TERVERIFIKASI'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : order.billingStatus === 'MENUNGGU_VERIFIKASI'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {order.billingStatus || 'MENUNGGU_VERIFIKASI'}
+                        </span>
+                        {order.billingNotes && (
+                          <p className="text-[10px] text-slate-500 mt-0.5 italic truncate max-w-[120px]">
+                            {order.billingNotes}
+                          </p>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 text-right no-print">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAdjust(order)}
+                          className="px-2 py-1 text-slate-600 hover:text-teal-800 hover:bg-slate-100 rounded text-xs inline-flex items-center gap-1 transition-colors"
+                          title="Koreksi Porsi / Catatan Penagihan"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Koreksi</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
             <tfoot>

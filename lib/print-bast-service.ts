@@ -848,12 +848,30 @@ export function printPatientMealHistoryInNewTab(
     const isServed = ['DELIVERED_TO_PATIENT', 'CONSUMPTION_RECORDED', 'COMPLETED'].includes(o.status);
     if (isServed) servedCount += (o.billedPortionCount || o.portionCount || 1);
 
-    const sch = o.schedule;
-    if (sch === 'SARAPAN') sarapanCount += (o.portionCount || 1);
-    else if (sch === 'SIANG') siangCount += (o.portionCount || 1);
-    else if (sch === 'MALAM') malamCount += (o.portionCount || 1);
+    const schedules = (o.selectedSchedules && o.selectedSchedules.length > 0)
+      ? o.selectedSchedules
+      : (o.schedule ? [o.schedule] : ['SIANG']);
 
-    totalCost += (o.finalBilledAmount || o.totalEstimatedPrice || 0);
+    const portion = o.billedPortionCount || o.portionCount || 1;
+    let orderCost = 0;
+    schedules.forEach((sch) => {
+      if (sch === 'SARAPAN') {
+        sarapanCount += portion;
+        orderCost += 25000 * portion;
+      } else if (sch === 'SIANG') {
+        siangCount += portion;
+        orderCost += 47000 * portion;
+      } else if (sch === 'MALAM') {
+        malamCount += portion;
+        orderCost += 47000 * portion;
+      } else {
+        orderCost += 25000 * portion;
+      }
+    });
+
+    totalCost += (o.finalBilledAmount && o.finalBilledAmount > 0)
+      ? o.finalBilledAmount
+      : (o.totalEstimatedPrice && o.totalEstimatedPrice > 0 ? o.totalEstimatedPrice : orderCost);
   });
 
   // Calculate length of stay (LoS)
@@ -871,18 +889,35 @@ export function printPatientMealHistoryInNewTab(
         const leftoverTxt = o.leftoverAssessment ? `${o.leftoverAssessment.consumptionPercentage}% Dimakan` : (isDelivered ? 'Tersaji' : o.status);
         const tempTxt = o.measuredFoodTemperature ? `${o.measuredFoodTemperature}°C` : '64.5°C';
 
+        const schedules = (o.selectedSchedules && o.selectedSchedules.length > 0)
+          ? o.selectedSchedules
+          : (o.schedule ? [o.schedule] : ['SIANG']);
+
+        const portion = o.billedPortionCount || o.portionCount || 1;
+        let itemCost = 0;
+        schedules.forEach((s) => {
+          if (s === 'SARAPAN') itemCost += 25000 * portion;
+          else if (s === 'SIANG') itemCost += 47000 * portion;
+          else if (s === 'MALAM') itemCost += 47000 * portion;
+          else itemCost += 25000 * portion;
+        });
+        const finalCost = (o.finalBilledAmount && o.finalBilledAmount > 0)
+          ? o.finalBilledAmount
+          : (o.totalEstimatedPrice && o.totalEstimatedPrice > 0 ? o.totalEstimatedPrice : itemCost);
+        const scheduleStr = schedules.map(s => s === 'SARAPAN' ? 'Sarapan (25k)' : s === 'SIANG' ? 'Siang (47k)' : 'Malam (47k)').join(', ');
+
         return `
           <tr style="border-bottom: 1px solid #cbd5e1; ${idx % 2 === 1 ? 'background-color: #f8fafc;' : ''}">
             <td style="padding: 6px 8px; text-align: center; font-weight: 600;">${idx + 1}</td>
             <td style="padding: 6px 8px; font-family: monospace; font-weight: 700; color: #0f766e;">${formatJakartaDate(o.serviceDate)}</td>
-            <td style="padding: 6px 8px; font-weight: 700; text-transform: uppercase;">${o.schedule}</td>
+            <td style="padding: 6px 8px; font-weight: 700; font-size: 10px;">${scheduleStr}</td>
             <td style="padding: 6px 8px;">
               <strong>${o.menuName || o.dietTypeName}</strong>
               <div style="font-size: 10px; color: #64748b;">Diet: ${o.dietTypeName} (${o.texture})</div>
             </td>
             <td style="padding: 6px 8px; text-align: center; font-mono; font-weight: 600;">${tempTxt}</td>
-            <td style="padding: 6px 8px; text-align: center; font-weight: 700;">${o.portionCount} porsi</td>
-            <td style="padding: 6px 8px; text-align: right; font-family: monospace;">Rp ${formatRupiah(o.finalBilledAmount || o.totalEstimatedPrice)}</td>
+            <td style="padding: 6px 8px; text-align: center; font-weight: 700;">${portion} porsi</td>
+            <td style="padding: 6px 8px; text-align: right; font-family: monospace; font-weight: 700;">Rp ${formatRupiah(finalCost)}</td>
             <td style="padding: 6px 8px; text-align: center;">
               <span style="display:inline-block; padding: 2px 6px; font-size: 10px; border-radius: 4px; font-weight: 600; background: ${isDelivered ? '#ecfdf5' : '#fef3c7'}; color: ${isDelivered ? '#065f46' : '#92400e'}; border: 1px solid ${isDelivered ? '#a7f3d0' : '#fde68a'};">
                 ${leftoverTxt}
@@ -1034,5 +1069,285 @@ export function printPatientMealHistoryInNewTab(
     filename: `Rekap_Makan_${patient.mrn}_${patient.name.replace(/[^a-zA-Z0-9]/g, '_')}.html`,
     contentHtml: bodyHtml,
   });
+}
+
+/**
+ * Cetak Etiket Stiker Makanan Wadah Pasien Khusus Printer Thermal Ukuran 80mm x 80mm
+ */
+export function printThermalEtiket80mm(order: MealOrder, settings: AppSettings) {
+  const dkiLogo = formatDriveOrDirectImageUrl(settings.dkiLogoUrl) || DEFAULT_DKI_LOGO;
+  const kemenkesLogo = formatDriveOrDirectImageUrl(settings.kemenkesLogoUrl) || DEFAULT_KEMENKES_LOGO;
+  const now = new Date();
+  const nowFormatted = formatJakartaDateTime(now.toISOString());
+  const serviceDateFormatted = formatJakartaDate(order.serviceDate);
+
+  const schedulesText = order.selectedSchedules && order.selectedSchedules.length > 0
+    ? order.selectedSchedules.map((s) => (s === 'SARAPAN' ? 'Sarapan' : s === 'SIANG' ? 'Siang' : 'Malam')).join(', ')
+    : order.schedule;
+
+  const allergyWarning = order.allergies && order.allergies.length > 0
+    ? `<div class="thermal-allergy">⚠️ ALERGI: ${order.allergies.join(', ').toUpperCase()}</div>`
+    : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Etiket Thermal 80mm - ${order.patientName} (${order.patientMrn})</title>
+  <style>
+    @page {
+      size: 80mm 80mm;
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      width: 80mm;
+      height: 80mm;
+      max-width: 80mm;
+      max-height: 80mm;
+      margin: 0 auto;
+      padding: 2.5mm 3mm;
+      background: #ffffff;
+      color: #000000;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .thermal-header {
+      text-align: center;
+      border-bottom: 1.5px solid #000000;
+      padding-bottom: 1.5mm;
+      margin-bottom: 1.5mm;
+    }
+    .thermal-header-logos {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3mm;
+      margin-bottom: 1mm;
+    }
+    .thermal-header-logos img {
+      height: 6mm;
+      max-width: 9mm;
+      object-fit: contain;
+    }
+    .thermal-header-instansi {
+      font-size: 8pt;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      line-height: 1.1;
+    }
+    .thermal-header-unit {
+      font-size: 6.5pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+      color: #111;
+    }
+    .thermal-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 1.2mm;
+    }
+    .patient-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      border-bottom: 1px dashed #000;
+      padding-bottom: 1mm;
+    }
+    .patient-name {
+      font-size: 11pt;
+      font-weight: 900;
+      text-transform: uppercase;
+      line-height: 1.1;
+      max-width: 52mm;
+      word-break: break-word;
+    }
+    .patient-mrn {
+      font-size: 9.5pt;
+      font-family: "Courier New", Courier, monospace;
+      font-weight: 900;
+      text-align: right;
+    }
+    .room-schedule-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #000;
+      color: #fff;
+      padding: 1mm 2mm;
+      border-radius: 1mm;
+    }
+    .room-badge {
+      font-size: 8pt;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+    .schedule-badge {
+      font-size: 8.5pt;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+    .diet-box {
+      border: 1px solid #000;
+      border-radius: 1mm;
+      padding: 1mm 1.5mm;
+      line-height: 1.2;
+    }
+    .diet-label {
+      font-size: 6.5pt;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .diet-val {
+      font-size: 8.5pt;
+      font-weight: 800;
+    }
+    .menu-name {
+      font-size: 7.5pt;
+      font-weight: 600;
+      color: #111;
+      margin-top: 0.5mm;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .thermal-allergy {
+      background: #000;
+      color: #fff;
+      font-size: 7pt;
+      font-weight: 900;
+      padding: 0.8mm 1.5mm;
+      text-align: center;
+      border-radius: 0.8mm;
+      letter-spacing: 0.3px;
+    }
+    .thermal-footer {
+      border-top: 1px solid #000;
+      padding-top: 1mm;
+      font-size: 6pt;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      line-height: 1.2;
+    }
+    .thermal-meta {
+      display: flex;
+      flex-direction: column;
+    }
+    .barcode-sim {
+      font-family: monospace;
+      font-size: 9pt;
+      letter-spacing: 1.5px;
+      font-weight: 900;
+      text-align: right;
+    }
+    .no-print-toolbar {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: #1e293b;
+      padding: 8px 12px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: flex;
+      gap: 8px;
+      z-index: 9999;
+    }
+    .no-print-toolbar button {
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .btn-print {
+      background: #0d9488;
+      color: white;
+    }
+    @media print {
+      .no-print-toolbar {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print-toolbar">
+    <button class="btn-print" onclick="window.print()">🖨️ Cetak Printer Thermal (80x80mm)</button>
+    <button onclick="window.close()" style="background:#475569; color:white;">Tutup</button>
+  </div>
+
+  <div class="thermal-header">
+    <div class="thermal-header-logos">
+      <img src="${dkiLogo}" alt="DKI" onerror="this.style.display='none'" />
+      <img src="${kemenkesLogo}" alt="Kemenkes" onerror="this.style.display='none'" />
+    </div>
+    <div class="thermal-header-instansi">PUSKESMAS KEP. SERIBU SELATAN</div>
+    <div class="thermal-header-unit">ETIKET MAKANAN RAWAT INAP</div>
+  </div>
+
+  <div class="thermal-body">
+    <div class="patient-row">
+      <div class="patient-name">${order.patientName}</div>
+      <div class="patient-mrn">RM: ${order.patientMrn}</div>
+    </div>
+
+    <div class="room-schedule-row">
+      <div class="room-badge">${order.room} &middot; Bed ${order.bed}</div>
+      <div class="schedule-badge">${schedulesText}</div>
+    </div>
+
+    <div class="diet-box">
+      <div class="diet-label">Preskripsi Diet &amp; Tekstur:</div>
+      <div class="diet-val">${order.dietTypeName} (${order.texture})</div>
+      <div class="menu-name">Menu: ${order.menuName || 'Sesuai Preskripsi Gizi'}</div>
+    </div>
+
+    ${allergyWarning}
+  </div>
+
+  <div class="thermal-footer">
+    <div class="thermal-meta">
+      <span>Tgl Saji: <strong>${serviceDateFormatted}</strong></span>
+      <span>Waktu: ${nowFormatted}</span>
+      <span>Verifikator: ${order.reviewedByName || 'Instalasi Gizi'}</span>
+    </div>
+    <div style="text-align: right;">
+      <div class="barcode-sim">||| | |||| | |||</div>
+      <span style="font-family: monospace; font-size: 6.5pt; font-weight: 700;">${order.orderNumber}</span>
+    </div>
+  </div>
+
+  <script>
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        window.print();
+      }, 350);
+    });
+  </script>
+</body>
+</html>`;
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('Browser memblokir popup window. Mohon izinkan popup untuk mencetak etiket thermal.');
+    return;
+  }
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
 }
 

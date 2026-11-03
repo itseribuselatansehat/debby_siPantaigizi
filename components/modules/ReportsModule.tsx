@@ -38,9 +38,46 @@ export function ReportsModule({ orders, patients }: ReportsModuleProps) {
   const [activeReportTab, setActiveReportTab] = useState<
     'PATIENT_RECAP' | 'MEAL_ORDERS' | 'BILLING' | 'LEFTOVERS' | 'SOP_QUALITY'
   >('PATIENT_RECAP');
-  const [selectedMonth, setSelectedMonth] = useState('2026-10');
+  const [selectedMonth, setSelectedMonth] = useState('ALL');
 
-  const filteredOrders = orders.filter((o) => o.serviceDate.startsWith(selectedMonth));
+  const filteredOrders = orders.filter((o) => selectedMonth === 'ALL' || o.serviceDate.startsWith(selectedMonth));
+
+  // Official tariff calculation helper: Sarapan 25k, Siang 47k, Malam 47k
+  const calculatePatientRecap = (patientOrders: MealOrder[]) => {
+    let sarapan = 0;
+    let siang = 0;
+    let malam = 0;
+    let totalCost = 0;
+
+    patientOrders.forEach((o) => {
+      const schedules = (o.selectedSchedules && o.selectedSchedules.length > 0)
+        ? o.selectedSchedules
+        : (o.schedule ? [o.schedule] : ['SIANG']);
+
+      const portion = o.billedPortionCount || o.portionCount || 1;
+      let orderCost = 0;
+      schedules.forEach((s) => {
+        if (s === 'SARAPAN') {
+          sarapan += portion;
+          orderCost += 25000 * portion;
+        } else if (s === 'SIANG') {
+          siang += portion;
+          orderCost += 47000 * portion;
+        } else if (s === 'MALAM') {
+          malam += portion;
+          orderCost += 47000 * portion;
+        } else {
+          orderCost += 25000 * portion;
+        }
+      });
+
+      totalCost += (o.finalBilledAmount && o.finalBilledAmount > 0)
+        ? o.finalBilledAmount
+        : (o.totalEstimatedPrice && o.totalEstimatedPrice > 0 ? o.totalEstimatedPrice : orderCost);
+    });
+
+    return { sarapan, siang, malam, totalPortions: sarapan + siang + malam, totalCost };
+  };
 
   // 1. Patient Recap Statistics
   const uniquePatientsInOrders = Array.from(new Set(filteredOrders.map((o) => o.patientId)));
@@ -103,17 +140,7 @@ export function ReportsModule({ orders, patients }: ReportsModuleProps) {
         const pOrders = filteredOrders.filter(
           (o) => o.patientId === p.id && o.status !== 'CANCELLED' && o.status !== 'REJECTED'
         );
-        let sarapan = 0;
-        let siang = 0;
-        let malam = 0;
-        let totalCost = 0;
-        pOrders.forEach((o) => {
-          if (o.schedule === 'SARAPAN') sarapan += (o.portionCount || 1);
-          else if (o.schedule === 'SIANG') siang += (o.portionCount || 1);
-          else if (o.schedule === 'MALAM') malam += (o.portionCount || 1);
-          totalCost += (o.finalBilledAmount || o.totalEstimatedPrice || 0);
-        });
-        const totalPortions = sarapan + siang + malam;
+        const { sarapan, siang, malam, totalPortions, totalCost } = calculatePatientRecap(pOrders);
         return [
           idx + 1,
           `"${p.mrn}"`,
@@ -209,12 +236,29 @@ export function ReportsModule({ orders, patients }: ReportsModuleProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg text-slate-700 font-mono"
-          />
+          <select
+            value={selectedMonth === 'ALL' ? 'ALL' : 'CUSTOM'}
+            onChange={(e) => {
+              if (e.target.value === 'ALL') {
+                setSelectedMonth('ALL');
+              } else {
+                setSelectedMonth(new Date().toISOString().slice(0, 7));
+              }
+            }}
+            className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg text-slate-700 bg-white"
+          >
+            <option value="ALL">Semua Periode (Semua Bulan)</option>
+            <option value="CUSTOM">Pilih Bulan Tertentu</option>
+          </select>
+
+          {selectedMonth !== 'ALL' && (
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg text-slate-700 font-mono"
+            />
+          )}
           <button
             type="button"
             onClick={handleExportCSV}
@@ -384,17 +428,7 @@ export function ReportsModule({ orders, patients }: ReportsModuleProps) {
                     const patientOrders = filteredOrders.filter(
                       (o) => o.patientId === p.id && o.status !== 'CANCELLED' && o.status !== 'REJECTED'
                     );
-                    let sarapan = 0;
-                    let siang = 0;
-                    let malam = 0;
-                    let totalCost = 0;
-                    patientOrders.forEach((o) => {
-                      if (o.schedule === 'SARAPAN') sarapan += (o.portionCount || 1);
-                      else if (o.schedule === 'SIANG') siang += (o.portionCount || 1);
-                      else if (o.schedule === 'MALAM') malam += (o.portionCount || 1);
-                      totalCost += (o.finalBilledAmount || o.totalEstimatedPrice || 0);
-                    });
-                    const totalPortions = sarapan + siang + malam;
+                    const { sarapan, siang, malam, totalPortions, totalCost } = calculatePatientRecap(patientOrders);
                     const isDischarged = p.status === 'DISCHARGED';
 
                     return (
@@ -508,20 +542,37 @@ export function ReportsModule({ orders, patients }: ReportsModuleProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredOrders.map((o) => (
-                    <tr key={o.id} className="hover:bg-slate-50">
-                      <td className="py-2 px-3 font-mono">{formatJakartaDate(o.serviceDate)}</td>
-                      <td className="py-2 px-3 font-mono font-bold text-teal-800">{o.orderNumber}</td>
-                      <td className="py-2 px-3 text-slate-700">{o.providerName || '-'}</td>
-                      <td className="py-2 px-3 font-medium text-slate-900">{o.menuName || o.dietTypeName || 'Menu Standar'}</td>
-                      <td className="py-2 px-3 text-right font-mono font-bold">{o.billedPortionCount || o.portionCount}</td>
-                      <td className="py-2 px-3 text-right font-mono">{formatRupiah(o.pricePerPortionSnapshot)}</td>
-                      <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                        {formatRupiah(o.finalBilledAmount || o.totalEstimatedPrice)}
-                      </td>
-                      <td className="py-2 px-3 font-semibold text-[10px]">{o.billingStatus}</td>
-                    </tr>
-                  ))}
+                  {filteredOrders.map((o) => {
+                    const schedules = (o.selectedSchedules && o.selectedSchedules.length > 0)
+                      ? o.selectedSchedules
+                      : (o.schedule ? [o.schedule] : ['SIANG']);
+
+                    let tariffUnit = 0;
+                    for (const s of schedules) {
+                      if (s === 'SARAPAN') tariffUnit += 25000;
+                      else if (s === 'SIANG') tariffUnit += 47000;
+                      else if (s === 'MALAM') tariffUnit += 47000;
+                      else tariffUnit += 25000;
+                    }
+                    const unitPrice = o.pricePerPortionSnapshot && o.pricePerPortionSnapshot > 0 ? o.pricePerPortionSnapshot : tariffUnit;
+                    const portions = o.billedPortionCount || o.portionCount || 1;
+                    const subtotal = o.finalBilledAmount && o.finalBilledAmount > 0 ? o.finalBilledAmount : (unitPrice * portions);
+
+                    return (
+                      <tr key={o.id} className="hover:bg-slate-50">
+                        <td className="py-2 px-3 font-mono">{formatJakartaDate(o.serviceDate)}</td>
+                        <td className="py-2 px-3 font-mono font-bold text-teal-800">{o.orderNumber}</td>
+                        <td className="py-2 px-3 text-slate-700">{o.providerName || '-'}</td>
+                        <td className="py-2 px-3 font-medium text-slate-900">{o.menuName || o.dietTypeName || 'Menu Standar'}</td>
+                        <td className="py-2 px-3 text-right font-mono font-bold">{portions}</td>
+                        <td className="py-2 px-3 text-right font-mono">{formatRupiah(unitPrice)}</td>
+                        <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                          {formatRupiah(subtotal)}
+                        </td>
+                        <td className="py-2 px-3 font-semibold text-[10px]">{o.billingStatus || 'MENUNGGU_VERIFIKASI'}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

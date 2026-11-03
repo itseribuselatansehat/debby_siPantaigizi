@@ -9,6 +9,7 @@ import {
   formatJakartaDateTime,
   formatRupiah,
   getTodayISODateJakarta,
+  cleanAndFormatWaPhone,
 } from '@/lib/date-utils';
 import { SopProgressBar } from '@/components/common/SopProgressBar';
 import {
@@ -88,7 +89,11 @@ export function OrderMealModule({
   };
 
   const handleSendViaWhatsApp = (order: MealOrder) => {
-    const phone = settings.nutritionistPhone || '6281287654321';
+    const allUsers = db.getUsers();
+    const nutrUser = allUsers.find((u) => u.role === 'AHLI_GIZI' && u.status === 'ACTIVE' && u.phoneNumber) ||
+                     allUsers.find((u) => u.role === 'AHLI_GIZI' && u.phoneNumber);
+    const rawPhone = nutrUser?.phoneNumber || settings.nutritionistPhone || '6281287654321';
+    const phone = cleanAndFormatWaPhone(rawPhone, '6281287654321');
     const message = generateWhatsAppMessage(order);
     const waUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank');

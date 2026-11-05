@@ -27,6 +27,10 @@ import {
   Lock,
   Search,
   UserPlus,
+  RefreshCw,
+  Database,
+  CloudDownload,
+  CloudUpload,
 } from 'lucide-react';
 
 interface MasterDataModuleProps {
@@ -57,6 +61,7 @@ export function MasterDataModule({ initialTab = 'USERS' }: MasterDataModuleProps
   const [resettingUser, setResettingUser] = useState<UserProfile | null>(null);
   const [newGeneratedPassword, setNewGeneratedPassword] = useState('');
   const [passwordCopied, setPasswordCopied] = useState(false);
+  const [isSyncingUsers, setIsSyncingUsers] = useState(false);
 
   // User Form
   const [userFormData, setUserFormData] = useState({
@@ -263,6 +268,35 @@ export function MasterDataModule({ initialTab = 'USERS' }: MasterDataModuleProps
       refresh();
     } else {
       showNotification(res.message, 'error');
+    }
+  };
+
+  const handlePullUsersFromGas = async () => {
+    setIsSyncingUsers(true);
+    try {
+      const res = await db.pullLiveDatabaseFromGas();
+      if (res.success) {
+        showNotification('Berhasil memperbarui data pengguna & seluruh master data dari Google Spreadsheet!');
+        refresh();
+      } else {
+        showNotification(res.message, 'error');
+      }
+    } catch (err: any) {
+      showNotification('Gagal menarik data dari Google Apps Script: ' + (err?.message || ''), 'error');
+    } finally {
+      setIsSyncingUsers(false);
+    }
+  };
+
+  const handlePushUsersToGas = async () => {
+    setIsSyncingUsers(true);
+    try {
+      db.triggerManualSyncToGas();
+      showNotification('Perintah sinkronisasi akun pengguna & database ke Google Apps Script berhasil dikirim.');
+    } catch (err: any) {
+      showNotification('Gagal mengirim data ke Google Apps Script: ' + (err?.message || ''), 'error');
+    } finally {
+      setTimeout(() => setIsSyncingUsers(false), 800);
     }
   };
 
@@ -720,6 +754,51 @@ export function MasterDataModule({ initialTab = 'USERS' }: MasterDataModuleProps
       {/* ================= TAB 1: USERS & ROLES ================= */}
       {activeTab === 'USERS' && (
         <div className="space-y-4">
+          {/* GAS Database Sync Banner */}
+          <div className="bg-gradient-to-r from-teal-50 via-sky-50 to-emerald-50 border border-teal-200/80 rounded-xl p-3.5 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-teal-700 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Database className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-teal-950">Database Akun Pengguna Terintegrasi GAS</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold text-[10px] border border-emerald-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                    Sheet: Users
+                  </span>
+                </div>
+                <p className="text-[11px] text-teal-800/80 mt-0.5">
+                  Seluruh akun petugas tersimpan permanen di Google Spreadsheet. Akun uji coba/demo telah ditiadakan untuk menjaga keamanan data.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={handlePullUsersFromGas}
+                disabled={isSyncingUsers}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-teal-300 hover:bg-teal-50 text-teal-900 rounded-lg text-xs font-semibold shadow-xs transition disabled:opacity-60"
+                title="Tarik data akun pengguna paling mutakhir langsung dari Google Spreadsheet"
+              >
+                <CloudDownload className={`w-3.5 h-3.5 text-teal-700 ${isSyncingUsers ? 'animate-bounce' : ''}`} />
+                <span>Tarik dari Spreadsheet</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePushUsersToGas}
+                disabled={isSyncingUsers}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold shadow-xs transition disabled:opacity-60"
+                title="Kirim dan sinkronkan pembaruan akun ke Google Apps Script sekarang"
+              >
+                <CloudUpload className="w-3.5 h-3.5" />
+                <span>Kirim & Sinkronkan</span>
+              </button>
+            </div>
+          </div>
+
           {/* Filter Bar */}
           <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
             <div className="relative flex-1 w-full">

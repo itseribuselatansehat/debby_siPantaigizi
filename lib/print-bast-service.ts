@@ -5,7 +5,7 @@
  */
 
 import { AppSettings, MealOrder, Patient } from '@/types/nutrition';
-import { calculateAgeAtDate, formatJakartaDate, formatJakartaDateTime, formatRupiah, getTodayISODateJakarta } from './date-utils';
+import { calculateAgeAtDate, formatJakartaDate, formatJakartaDateTime, formatRupiah, getTodayISODateJakarta, calculateInpatientStayDay } from './date-utils';
 
 // Preset Logo Resmi Kualitas Tinggi
 export const DEFAULT_DKI_LOGO =
@@ -905,11 +905,15 @@ export function printPatientMealHistoryInNewTab(
           ? o.finalBilledAmount
           : (o.totalEstimatedPrice && o.totalEstimatedPrice > 0 ? o.totalEstimatedPrice : itemCost);
         const scheduleStr = schedules.map(s => s === 'SARAPAN' ? 'Sarapan (25k)' : s === 'SIANG' ? 'Siang (47k)' : 'Malam (47k)').join(', ');
+        const mealStayDay = calculateInpatientStayDay(patient.admissionDate, o.serviceDate);
 
         return `
           <tr style="border-bottom: 1px solid #cbd5e1; ${idx % 2 === 1 ? 'background-color: #f8fafc;' : ''}">
             <td style="padding: 6px 8px; text-align: center; font-weight: 600;">${idx + 1}</td>
-            <td style="padding: 6px 8px; font-family: monospace; font-weight: 700; color: #0f766e;">${formatJakartaDate(o.serviceDate)}</td>
+            <td style="padding: 6px 8px; font-family: monospace; font-weight: 700; color: #0f766e;">
+              ${formatJakartaDate(o.serviceDate)}
+              <div style="color: #b45309; font-size: 9.5px; font-weight: 700;">Hari ke-${mealStayDay} Rawat</div>
+            </td>
             <td style="padding: 6px 8px; font-weight: 700; font-size: 10px;">${scheduleStr}</td>
             <td style="padding: 6px 8px;">
               <strong>${o.menuName || o.dietTypeName}</strong>

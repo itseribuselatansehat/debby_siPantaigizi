@@ -19,6 +19,11 @@ import {
   Check,
   XCircle,
   ExternalLink,
+  Calendar,
+  CalendarDays,
+  Filter,
+  ArrowUpDown,
+  RotateCcw,
 } from 'lucide-react';
 import {
   printBastReceivingInNewTab,
@@ -57,20 +62,84 @@ export function FoodReceivingModule({ orders, onOrderUpdated }: FoodReceivingMod
   const [orderForPrintBast, setOrderForPrintBast] = useState<MealOrder | null>(null);
 
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'SARAPAN' | 'SIANG' | 'MALAM'>('ALL');
+  const [filterMonth, setFilterMonth] = useState<string>('ALL');
+  const [filterDate, setFilterDate] = useState<string>('');
+  const [sortOrder, setSortOrder] = useState<'DESC' | 'ASC'>('DESC');
+
+  // Compute available months from all orders
+  const availableMonths = React.useMemo(() => {
+    const setM = new Set<string>();
+    orders.forEach((o) => {
+      if (o.serviceDate) {
+        const ym = o.serviceDate.slice(0, 7);
+        if (ym && ym.length === 7) setM.add(ym);
+      }
+    });
+    const currentYm = new Date().toISOString().slice(0, 7);
+    setM.add(currentYm);
+    return Array.from(setM).sort().reverse();
+  }, [orders]);
+
+  const getMonthLabel = (ym: string) => {
+    const [year, month] = ym.split('-');
+    const monthNames = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+    ];
+    const mIdx = parseInt(month, 10) - 1;
+    return `${monthNames[mIdx] || month} ${year}`;
+  };
+
+  const handleResetFilters = () => {
+    setCategoryFilter('ALL');
+    setFilterMonth('ALL');
+    setFilterDate('');
+    setSortOrder('DESC');
+  };
+
+  const isFilterActive = categoryFilter !== 'ALL' || filterMonth !== 'ALL' || filterDate !== '' || sortOrder !== 'DESC';
+
+  // Helper filter and sort
+  const filterAndSortOrders = (orderList: MealOrder[]) => {
+    return orderList
+      .filter((o) => {
+        // Schedule filter
+        if (categoryFilter !== 'ALL') {
+          const matchSchedule =
+            o.schedule === categoryFilter ||
+            (o.selectedSchedules && o.selectedSchedules.includes(categoryFilter));
+          if (!matchSchedule) return false;
+        }
+
+        // Specific date filter
+        if (filterDate) {
+          if (!o.serviceDate || !o.serviceDate.startsWith(filterDate)) return false;
+        }
+
+        // Month filter (YYYY-MM)
+        if (filterMonth !== 'ALL') {
+          if (!o.serviceDate || !o.serviceDate.startsWith(filterMonth)) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        const dateA = new Date(a.serviceDate || a.createdAt).getTime();
+        const dateB = new Date(b.serviceDate || b.createdAt).getTime();
+        return sortOrder === 'DESC' ? dateB - dateA : dateA - dateB;
+      });
+  };
 
   // Filter orders that need receiving
-  const receivingOrders = orders.filter((o) => {
-    const isReceivingStatus = ['READY_TO_DELIVER', 'IN_DELIVERY'].includes(o.status);
-    const matchesCategory =
-      categoryFilter === 'ALL' ||
-      o.schedule === categoryFilter ||
-      (o.selectedSchedules && o.selectedSchedules.includes(categoryFilter));
-    return isReceivingStatus && matchesCategory;
-  });
+  const rawReceivingOrders = orders.filter((o) =>
+    ['READY_TO_DELIVER', 'IN_DELIVERY'].includes(o.status)
+  );
+  const receivingOrders = filterAndSortOrders(rawReceivingOrders);
 
-  const completedReceivings = orders.filter((o) =>
+  const rawCompletedReceivings = orders.filter((o) =>
     ['RECEIVED_BY_WAITER', 'DISTRIBUTION_IN_PROGRESS', 'DELIVERED_TO_PATIENT', 'CONSUMPTION_RECORDED', 'COMPLETED', 'DELIVERY_EXCEPTION'].includes(o.status)
   );
+  const completedReceivings = filterAndSortOrders(rawCompletedReceivings);
 
   const handleStartInspection = (order: MealOrder) => {
     setSelectedOrder(order);
@@ -149,6 +218,112 @@ export function FoodReceivingModule({ orders, onOrderUpdated }: FoodReceivingMod
           <span className="px-3 py-1 bg-amber-100 text-amber-900 rounded-lg font-semibold">
             {receivingOrders.length} Pengiriman Menunggu Diterima
           </span>
+        </div>
+      </div>
+
+      {/* Filter & Sort Controls */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+            <Filter className="w-4 h-4 text-teal-700" />
+            <span>Filter &amp; Sortir Penerimaan Makanan Berdasarkan Tanggal &amp; Bulan</span>
+          </div>
+          {isFilterActive && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="text-xs text-rose-600 hover:text-rose-800 flex items-center gap-1 font-medium transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset Filter</span>
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+          {/* Sort Order */}
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+              <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
+              <span>Sortir Urutan Tanggal</span>
+            </label>
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as 'DESC' | 'ASC')}
+              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium focus:ring-1 focus:ring-teal-600 focus:border-teal-600"
+            >
+              <option value="DESC">Terbaru &rarr; Terlama (Default)</option>
+              <option value="ASC">Terlama &rarr; Terbaru</option>
+            </select>
+          </div>
+
+          {/* Filter Bulan */}
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-teal-600" />
+              <span>Sortir / Filter Bulan</span>
+            </label>
+            <select
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(e.target.value)}
+              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium focus:ring-1 focus:ring-teal-600 focus:border-teal-600"
+            >
+              <option value="ALL">Semua Bulan</option>
+              {availableMonths.map((ym) => (
+                <option key={ym} value={ym}>
+                  {getMonthLabel(ym)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter Tanggal Spesifik */}
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+              <CalendarDays className="w-3.5 h-3.5 text-teal-600" />
+              <span>Pilih Tanggal Spesifik</span>
+            </label>
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium focus:ring-1 focus:ring-teal-600 focus:border-teal-600"
+            />
+          </div>
+
+          {/* Filter Kategori Jadwal */}
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Filter Kategori Makan</label>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value as any)}
+              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium focus:ring-1 focus:ring-teal-600 focus:border-teal-600"
+            >
+              <option value="ALL">Semua Jadwal (Sarapan, Siang, Malam)</option>
+              <option value="SARAPAN">Sarapan Pagi</option>
+              <option value="SIANG">Makan Siang</option>
+              <option value="MALAM">Makan Malam</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Status info bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 gap-1">
+          <span>
+            Hasil Filter: <strong>{receivingOrders.length}</strong> pesanan siap serah terima · <strong>{completedReceivings.length}</strong> riwayat dokumen BAST
+          </span>
+          <div className="flex items-center gap-2">
+            {filterMonth !== 'ALL' && (
+              <span className="text-teal-800 font-semibold bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                Bulan: {getMonthLabel(filterMonth)}
+              </span>
+            )}
+            {filterDate && (
+              <span className="text-sky-800 font-semibold bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                Tanggal: {formatJakartaDate(filterDate)}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

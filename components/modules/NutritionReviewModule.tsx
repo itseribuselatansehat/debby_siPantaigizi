@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { MealOrder, MealSchedule, MenuItem } from '@/types/nutrition';
 import { DbStore } from '@/lib/db-store';
-import { formatJakartaDate, formatJakartaDateTime, formatRupiah, cleanAndFormatWaPhone } from '@/lib/date-utils';
+import { formatJakartaDate, formatJakartaDateTime, formatRupiah, cleanAndFormatWaPhone, getAppPublicUrl } from '@/lib/date-utils';
 import {
   CheckCircle,
   XCircle,
@@ -82,6 +82,7 @@ export function NutritionReviewModule({ orders, onOrderUpdated }: NutritionRevie
   };
 
   const generateWhatsAppMessageForProvider = (order: MealOrder) => {
+    const appUrl = getAppPublicUrl();
     const schedules = order.selectedSchedules && order.selectedSchedules.length > 0
       ? order.selectedSchedules.map((s) => (s === 'SARAPAN' ? 'Sarapan (25k)' : s === 'SIANG' ? 'Siang (47k)' : 'Malam (47k)')).join(', ')
       : order.schedule;
@@ -100,6 +101,7 @@ export function NutritionReviewModule({ orders, onOrderUpdated }: NutritionRevie
       `Total Nilai SPK: *${formatRupiah(order.totalEstimatedPrice)}*\n` +
       `Catatan Khusus Gizi: ${order.reviewNotes || order.specialClinicalNotes || 'Sajikan hangat dan bersih sesuai SOP'}\n` +
       `Verifikator: *${order.reviewedByName || 'Instalasi Gizi'}*\n\n` +
+      `🔗 *Buka Aplikasi Dapur Katering:* ${appUrl}\n\n` +
       `Mohon katering CV Berkah Bahari segera mempersiapkan dan mengirim sesuai jadwal. Terima kasih!`
     );
   };

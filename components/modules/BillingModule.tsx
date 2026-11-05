@@ -8,6 +8,8 @@ import { formatJakartaDate, formatRupiah } from '@/lib/date-utils';
 import {
   Receipt,
   CheckCircle,
+  CheckCircle2,
+  FileCheck,
   FileSpreadsheet,
   Printer,
   Edit3,
@@ -15,6 +17,9 @@ import {
   Filter,
   DollarSign,
   AlertCircle,
+  Eye,
+  Clock,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   formatDriveOrDirectImageUrl,
@@ -29,6 +34,8 @@ interface BillingModuleProps {
 
 export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
   const db = DbStore.getInstance();
+  const currentUser = db.getCurrentUser();
+  const isProvider = currentUser?.role === 'PENYEDIA';
   const settings = db.getSettings();
   const dkiLogo = formatDriveOrDirectImageUrl(settings.dkiLogoUrl) || DEFAULT_DKI_LOGO;
   const kemenkesLogo = formatDriveOrDirectImageUrl(settings.kemenkesLogoUrl) || DEFAULT_KEMENKES_LOGO;
@@ -45,24 +52,45 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
       ? order.selectedSchedules
       : (order.schedule ? [order.schedule] : ['SIANG']);
 
-    let tariffUnit = 0;
-    for (const s of schedules) {
-      if (s === 'SARAPAN') tariffUnit += 25000;
-      else if (s === 'SIANG') tariffUnit += 47000;
-      else if (s === 'MALAM') tariffUnit += 47000;
-      else tariffUnit += 25000;
-    }
-
-    const unitPrice = order.pricePerPortionSnapshot && order.pricePerPortionSnapshot > 0
-      ? order.pricePerPortionSnapshot
-      : tariffUnit;
-
     const portions = order.billedPortionCount || order.portionCount || 1;
+
+    let sarapanPortions = 0;
+    let siangPortions = 0;
+    let malamPortions = 0;
+
+    schedules.forEach((s) => {
+      if (s === 'SARAPAN') sarapanPortions += portions;
+      else if (s === 'SIANG') siangPortions += portions;
+      else if (s === 'MALAM') malamPortions += portions;
+      else siangPortions += portions;
+    });
+
+    const sarapanAmount = sarapanPortions * 25000;
+    const siangAmount = siangPortions * 47000;
+    const malamAmount = malamPortions * 47000;
+    const computedTotal = sarapanAmount + siangAmount + malamAmount;
+
+    // Unit rate per 1 complete package of selected schedules
+    const unitPrice = (schedules.includes('SARAPAN') ? 25000 : 0) +
+                      (schedules.includes('SIANG') ? 47000 : 0) +
+                      (schedules.includes('MALAM') ? 47000 : 0) || 47000;
+
     const subtotal = order.finalBilledAmount && order.finalBilledAmount > 0
       ? order.finalBilledAmount
-      : (unitPrice * portions);
+      : computedTotal;
 
-    return { unitPrice, portions, subtotal };
+    return {
+      schedules,
+      portions,
+      unitPrice,
+      sarapanPortions,
+      siangPortions,
+      malamPortions,
+      sarapanAmount,
+      siangAmount,
+      malamAmount,
+      subtotal,
+    };
   };
 
   // Billable orders (orders that reached delivery, consumption, or completed)
@@ -76,19 +104,79 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
       (o.dietTypeName && o.dietTypeName.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (o.providerName && o.providerName.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const matchesStatus = filterStatus === 'ALL' || o.billingStatus === filterStatus;
+    const matchesStatus =
+      filterStatus === 'ALL'
+        ? true
+        : filterStatus === 'DISETUJUI'
+        ? (o.billingStatus === 'SESUAI_SPJ_KENYATAAN' || o.billingStatus === 'TERVERIFIKASI')
+        : filterStatus === 'BELUM_DISETUJUI'
+        ? (o.billingStatus === 'MENUNGGU_VERIFIKASI' || o.billingStatus === 'BELUM_DIREKAP' || !o.billingStatus)
+        : o.billingStatus === filterStatus;
+
     return isServiceInMonth && matchesSearch && matchesStatus;
   });
 
+  // Calculate totals breakdown per schedule
+  const totalSarapanPortions = billableOrders.reduce((sum, o) => sum + getOrderPricing(o).sarapanPortions, 0);
+  const totalSiangPortions = billableOrders.reduce((sum, o) => sum + getOrderPricing(o).siangPortions, 0);
+  const totalMalamPortions = billableOrders.reduce((sum, o) => sum + getOrderPricing(o).malamPortions, 0);
+
+  const totalSarapanAmount = totalSarapanPortions * 25000;
+  const totalSiangAmount = totalSiangPortions * 47000;
+  const totalMalamAmount = totalMalamPortions * 47000;
+
   const totalBillableAmount = billableOrders.reduce((sum, o) => sum + getOrderPricing(o).subtotal, 0);
+  const totalSpjApprovedAmount = billableOrders
+    .filter((o) => o.billingStatus === 'SESUAI_SPJ_KENYATAAN')
+    .reduce((sum, o) => sum + getOrderPricing(o).subtotal, 0);
+  const totalSpjApprovedCount = billableOrders.filter((o) => o.billingStatus === 'SESUAI_SPJ_KENYATAAN').length;
   const totalVerifiedAmount = billableOrders
-    .filter((o) => o.billingStatus === 'TERVERIFIKASI' || o.status === 'COMPLETED')
+    .filter((o) => o.billingStatus === 'TERVERIFIKASI' || o.billingStatus === 'SESUAI_SPJ_KENYATAAN' || o.status === 'COMPLETED')
     .reduce((sum, o) => sum + getOrderPricing(o).subtotal, 0);
   const totalPendingAmount = billableOrders
     .filter((o) => o.billingStatus === 'MENUNGGU_VERIFIKASI' || o.billingStatus === 'BELUM_DIREKAP' || !o.billingStatus)
     .reduce((sum, o) => sum + getOrderPricing(o).subtotal, 0);
 
+  const handleApproveSpj = (order: MealOrder) => {
+    if (isProvider) {
+      alert('Penyedia katering tidak memiliki izin untuk mengubah atau menyetujui tagihan. Hak akses penyedia hanya melihat status.');
+      return;
+    }
+    const res = db.approveBillingSpj(order.id);
+    if (res.success) {
+      onOrderUpdated();
+    } else {
+      alert(res.message);
+    }
+  };
+
+  const handleApproveAllSpj = () => {
+    if (isProvider) {
+      alert('Penyedia katering tidak memiliki izin untuk menyetujui tagihan.');
+      return;
+    }
+    const unapproved = billableOrders.filter((o) => o.billingStatus !== 'SESUAI_SPJ_KENYATAAN');
+    if (unapproved.length === 0) {
+      alert('Seluruh transaksi tagihan pada filter ini sudah berstatus SESUAI DENGAN SPJ KENYATAAN.');
+      return;
+    }
+
+    if (
+      confirm(
+        `Setujui ${unapproved.length} item transaksi tagihan sebagai SUDAH SESUAI DENGAN SPJ KENYATAAN?`
+      )
+    ) {
+      const res = db.approveAllBillingsSpj(unapproved.map((o) => o.id));
+      alert(res.message);
+      onOrderUpdated();
+    }
+  };
+
   const handleOpenAdjust = (order: MealOrder) => {
+    if (isProvider) {
+      alert('Penyedia katering tidak memiliki izin untuk mengedit atau mengoreksi tagihan. Hak akses penyedia hanya melihat status disetujui / belum disetujui.');
+      return;
+    }
     setSelectedOrderForAdjust(order);
     setAdjustedPortions(order.billedPortionCount || order.portionCount);
     setAdjustNotes(order.billingNotes || '');
@@ -96,6 +184,10 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
 
   const handleSaveAdjust = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isProvider) {
+      alert('Aksi ditolak: Penyedia katering tidak dapat mengedit tagihan.');
+      return;
+    }
     if (!selectedOrderForAdjust) return;
 
     if (!adjustNotes.trim()) {
@@ -109,6 +201,10 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
   };
 
   const handleVerifyAllPending = () => {
+    if (isProvider) {
+      alert('Penyedia katering tidak memiliki izin untuk memverifikasi tagihan.');
+      return;
+    }
     const pending = billableOrders.filter((o) => o.billingStatus === 'MENUNGGU_VERIFIKASI');
     if (pending.length === 0) {
       alert('Tidak ada item tagihan berstatus Menunggu Verifikasi.');
@@ -190,7 +286,7 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={handleExportCSV}
@@ -207,33 +303,149 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
             <Printer className="w-4 h-4 text-slate-600" />
             <span>Cetak Rekap</span>
           </button>
-          <button
-            type="button"
-            onClick={handleVerifyAllPending}
-            className="px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5"
-          >
-            <CheckCircle className="w-4 h-4" />
-            <span>Verifikasi Semua Tertunda</span>
-          </button>
+          {!isProvider && (
+            <>
+              <button
+                type="button"
+                onClick={handleVerifyAllPending}
+                className="px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>Verifikasi Semua Tertunda</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveAllSpj}
+                className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5"
+                title="Setujui seluruh tagihan yang tampil sebagai tagihan yang sesuai dengan SPJ kenyataan"
+              >
+                <FileCheck className="w-4 h-4" />
+                <span>Setujui Semua Sesuai SPJ</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Financial Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 no-print">
+      {/* Provider Read-Only Information Banner */}
+      {isProvider && (
+        <div className="bg-gradient-to-r from-sky-50 via-teal-50 to-emerald-50 border border-sky-200/90 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-slate-800 shadow-xs no-print">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-sky-700 text-white flex items-center justify-center shrink-0 font-bold shadow-xs">
+              <Eye className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-slate-900">Akses Rekap Tagihan Penyedia (Mode Pantau)</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300">
+                  Read-Only
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Penyedia katering hanya dapat <strong>melihat status tagihan</strong> (Disetujui atau Belum Disetujui). Hak akses koreksi porsi dan persetujuan SPJ sepenuhnya berada pada Ahli Gizi dan Administrator Puskesmas.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto text-[11px] font-bold">
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Status: Disetujui</span>
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-amber-700" />
+              <span>Status: Belum Disetujui</span>
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Financial Summary Breakdown per Schedule: Sarapan 25k, Siang 47k, Malam 47k */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 no-print">
+        <div className="bg-amber-50/80 p-3.5 rounded-xl border border-amber-200 shadow-sm">
+          <div className="flex items-center justify-between text-amber-900 font-semibold text-xs">
+            <span>Sarapan Pagi</span>
+            <span className="font-mono bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded text-[11px] font-bold">
+              {totalSarapanPortions} Porsi
+            </span>
+          </div>
+          <p className="text-xl font-extrabold text-amber-950 font-mono mt-1 tabular-nums">
+            {formatRupiah(totalSarapanAmount)}
+          </p>
+          <span className="text-[10px] text-amber-700 block mt-0.5">Tarif resmi: Rp 25.000 / porsi</span>
+        </div>
+
+        <div className="bg-teal-50/80 p-3.5 rounded-xl border border-teal-200 shadow-sm">
+          <div className="flex items-center justify-between text-teal-900 font-semibold text-xs">
+            <span>Makan Siang</span>
+            <span className="font-mono bg-teal-200/80 text-teal-900 px-2 py-0.5 rounded text-[11px] font-bold">
+              {totalSiangPortions} Porsi
+            </span>
+          </div>
+          <p className="text-xl font-extrabold text-teal-950 font-mono mt-1 tabular-nums">
+            {formatRupiah(totalSiangAmount)}
+          </p>
+          <span className="text-[10px] text-teal-700 block mt-0.5">Tarif resmi: Rp 47.000 / porsi</span>
+        </div>
+
+        <div className="bg-indigo-50/80 p-3.5 rounded-xl border border-indigo-200 shadow-sm">
+          <div className="flex items-center justify-between text-indigo-900 font-semibold text-xs">
+            <span>Makan Malam</span>
+            <span className="font-mono bg-indigo-200/80 text-indigo-900 px-2 py-0.5 rounded text-[11px] font-bold">
+              {totalMalamPortions} Porsi
+            </span>
+          </div>
+          <p className="text-xl font-extrabold text-indigo-950 font-mono mt-1 tabular-nums">
+            {formatRupiah(totalMalamAmount)}
+          </p>
+          <span className="text-[10px] text-indigo-700 block mt-0.5">Tarif resmi: Rp 47.000 / porsi</span>
+        </div>
+
+        <div className="bg-slate-900 p-3.5 rounded-xl text-white shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-300 font-semibold text-xs">
+            <span>Total Tagihan Seluruhnya</span>
+            <span className="font-mono text-teal-300 text-[11px] font-bold">
+              {totalSarapanPortions + totalSiangPortions + totalMalamPortions} Porsi
+            </span>
+          </div>
+          <p className="text-xl font-extrabold text-white font-mono mt-1 tabular-nums">
+            {formatRupiah(totalBillableAmount)}
+          </p>
+          <span className="text-[10px] text-slate-400 block mt-0.5">Kalkulasi Sarapan + Siang + Malam</span>
+        </div>
+      </div>
+
+      {/* Financial Status Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 no-print">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <span className="text-xs text-slate-500 block">Total Nilai Tagihan Bulan Ini</span>
+          <span className="text-xs text-slate-500 block">Total Nilai Tagihan Terdata</span>
           <p className="text-2xl font-extrabold text-slate-900 font-mono mt-1 tabular-nums">
             {formatRupiah(totalBillableAmount)}
           </p>
-          <p className="text-[11px] text-slate-400 mt-1">{billableOrders.length} item transaksi makan</p>
+          <p className="text-[11px] text-slate-400 mt-1">{billableOrders.length} item transaksi makan tersaji</p>
+        </div>
+
+        <div className="bg-emerald-50/70 p-4 rounded-xl border border-emerald-300 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-emerald-900 font-bold block flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Sesuai SPJ Kenyataan</span>
+            </span>
+            <span className="font-mono bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded text-[10px] font-extrabold">
+              {totalSpjApprovedCount} Item
+            </span>
+          </div>
+          <p className="text-2xl font-extrabold text-emerald-950 font-mono mt-1 tabular-nums">
+            {formatRupiah(totalSpjApprovedAmount)}
+          </p>
+          <p className="text-[11px] text-emerald-700 mt-1">Telah disetujui sah sesuai SPJ kenyataan</p>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <span className="text-xs text-emerald-700 font-medium block">Tagihan Terverifikasi (Siap Dibayar)</span>
-          <p className="text-2xl font-extrabold text-emerald-700 font-mono mt-1 tabular-nums">
+          <span className="text-xs text-teal-700 font-medium block">Tagihan Terverifikasi</span>
+          <p className="text-2xl font-extrabold text-teal-700 font-mono mt-1 tabular-nums">
             {formatRupiah(totalVerifiedAmount)}
           </p>
-          <p className="text-[11px] text-emerald-600 mt-1">Lengkap bukti serah terima & penyajian</p>
+          <p className="text-[11px] text-teal-600 mt-1">Lengkap bukti serah terima &amp; penyajian</p>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -241,7 +453,7 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
           <p className="text-2xl font-extrabold text-amber-700 font-mono mt-1 tabular-nums">
             {formatRupiah(totalPendingAmount)}
           </p>
-          <p className="text-[11px] text-amber-600 mt-1">Perlu pemeriksaan bukti foto & TTD</p>
+          <p className="text-[11px] text-amber-600 mt-1">Pemeriksaan bukti foto &amp; TTD pramusaji</p>
         </div>
       </div>
 
@@ -286,13 +498,24 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg text-slate-700 bg-white"
+            className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg text-slate-700 bg-white font-medium"
           >
-            <option value="ALL">Semua Status Tagihan</option>
-            <option value="MENUNGGU_VERIFIKASI">Menunggu Verifikasi</option>
-            <option value="TERVERIFIKASI">Terverifikasi</option>
-            <option value="BELUM_DIREKAP">Belum Direkap</option>
-            <option value="TIDAK_DAPAT_DITAGIHKAN">Tidak Dapat Ditagihkan</option>
+            {isProvider ? (
+              <>
+                <option value="ALL">Semua Status (Semua Tagihan)</option>
+                <option value="DISETUJUI">✓ Sudah Disetujui (SPJ / Terverifikasi)</option>
+                <option value="BELUM_DISETUJUI">⏳ Belum Disetujui (Menunggu Verifikasi)</option>
+              </>
+            ) : (
+              <>
+                <option value="ALL">Semua Status Tagihan</option>
+                <option value="SESUAI_SPJ_KENYATAAN">Sesuai SPJ Kenyataan</option>
+                <option value="MENUNGGU_VERIFIKASI">Menunggu Verifikasi</option>
+                <option value="TERVERIFIKASI">Terverifikasi</option>
+                <option value="BELUM_DIREKAP">Belum Direkap</option>
+                <option value="TIDAK_DAPAT_DITAGIHKAN">Tidak Dapat Ditagihkan</option>
+              </>
+            )}
           </select>
         </div>
       </div>
@@ -355,7 +578,9 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
                 <th className="py-2.5 px-3 text-right">Harga Satuan</th>
                 <th className="py-2.5 px-3 text-right">Subtotal</th>
                 <th className="py-2.5 px-3">Status Tagihan</th>
-                <th className="py-2.5 px-3 text-right no-print">Aksi</th>
+                <th className="py-2.5 px-3 text-right no-print">
+                  {isProvider ? 'Status Persetujuan' : 'Aksi'}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -385,13 +610,29 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
                         <span className="text-[10px] text-slate-500 font-mono">{order.room} ({order.bed})</span>
                       </td>
                       <td className="py-2 px-3">
-                        <span className="font-semibold text-slate-800 block truncate max-w-[150px]">
+                        <span className="font-semibold text-slate-800 block truncate max-w-[170px]">
                           {order.menuName || order.dietTypeName || 'Menu Standar'}
                         </span>
-                        <span className="text-[10px] text-slate-500 font-medium">{displaySchedules} · {order.texture}</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {pricing.sarapanPortions > 0 && (
+                            <span className="px-1.5 py-0.5 bg-amber-50 text-amber-900 border border-amber-200 rounded text-[9.5px] font-bold">
+                              Sarapan {pricing.sarapanPortions}x (@25k)
+                            </span>
+                          )}
+                          {pricing.siangPortions > 0 && (
+                            <span className="px-1.5 py-0.5 bg-teal-50 text-teal-900 border border-teal-200 rounded text-[9.5px] font-bold">
+                              Siang {pricing.siangPortions}x (@47k)
+                            </span>
+                          )}
+                          {pricing.malamPortions > 0 && (
+                            <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-900 border border-indigo-200 rounded text-[9.5px] font-bold">
+                              Malam {pricing.malamPortions}x (@47k)
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-2 px-3 text-right font-mono font-bold text-slate-800">
-                        {pricing.portions}
+                        {pricing.portions} porsi
                       </td>
                       <td className="py-2 px-3 text-right font-mono text-slate-600">
                         {formatRupiah(pricing.unitPrice)}
@@ -400,33 +641,91 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
                         {formatRupiah(pricing.subtotal)}
                       </td>
                       <td className="py-2 px-3">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                            order.billingStatus === 'TERVERIFIKASI'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : order.billingStatus === 'MENUNGGU_VERIFIKASI'
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-slate-100 text-slate-700'
-                          }`}
-                        >
-                          {order.billingStatus || 'MENUNGGU_VERIFIKASI'}
-                        </span>
-                        {order.billingNotes && (
+                        {order.billingStatus === 'SESUAI_SPJ_KENYATAAN' ? (
+                          <div className="space-y-0.5">
+                            <span className="px-2.5 py-1 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300 inline-flex items-center gap-1 shadow-2xs">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                              <span>SESUAI DENGAN SPJ KENYATAAN</span>
+                            </span>
+                            {order.spjApprovedByName && (
+                              <p className="text-[9.5px] text-emerald-800 font-medium">
+                                Disetujui: {order.spjApprovedByName}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                              order.billingStatus === 'TERVERIFIKASI'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : order.billingStatus === 'MENUNGGU_VERIFIKASI'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {order.billingStatus || 'MENUNGGU_VERIFIKASI'}
+                          </span>
+                        )}
+                        {order.billingNotes && order.billingStatus !== 'SESUAI_SPJ_KENYATAAN' && (
                           <p className="text-[10px] text-slate-500 mt-0.5 italic truncate max-w-[120px]">
                             {order.billingNotes}
                           </p>
                         )}
                       </td>
                       <td className="py-2 px-3 text-right no-print">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenAdjust(order)}
-                          className="px-2 py-1 text-slate-600 hover:text-teal-800 hover:bg-slate-100 rounded text-xs inline-flex items-center gap-1 transition-colors"
-                          title="Koreksi Porsi / Catatan Penagihan"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                          <span>Koreksi</span>
-                        </button>
+                        {isProvider ? (
+                          <div className="flex items-center justify-end">
+                            {order.billingStatus === 'SESUAI_SPJ_KENYATAAN' ? (
+                              <span className="px-2.5 py-1 rounded text-[10.5px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300 inline-flex items-center gap-1 shadow-2xs">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                                <span>DISETUJUI (SPJ)</span>
+                              </span>
+                            ) : order.billingStatus === 'TERVERIFIKASI' ? (
+                              <span className="px-2.5 py-1 rounded text-[10.5px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1 shadow-2xs">
+                                <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span>DISETUJUI</span>
+                              </span>
+                            ) : order.billingStatus === 'TIDAK_DAPAT_DITAGIHKAN' ? (
+                              <span className="px-2.5 py-1 rounded text-[10.5px] font-bold bg-rose-50 text-rose-900 border border-rose-200 inline-flex items-center gap-1 shadow-2xs">
+                                <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                <span>TIDAK DISETUJUI</span>
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded text-[10.5px] font-bold bg-amber-50 text-amber-900 border border-amber-200 inline-flex items-center gap-1 shadow-2xs">
+                                <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                <span>BELUM DISETUJUI</span>
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            {order.billingStatus === 'SESUAI_SPJ_KENYATAAN' ? (
+                              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded text-[10px] font-bold inline-flex items-center gap-1 shadow-2xs">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span>Sudah Sesuai SPJ</span>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleApproveSpj(order)}
+                                className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[11px] font-bold shadow-xs transition-all inline-flex items-center gap-1 hover:scale-[1.02] active:scale-[0.98]"
+                                title="Setujui tagihan ini sudah sesuai dengan SPJ kenyataan"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-100" />
+                                <span>Setujui Sesuai SPJ</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAdjust(order)}
+                              className="px-2 py-1 text-slate-600 hover:text-teal-800 hover:bg-slate-100 rounded text-xs inline-flex items-center gap-1 transition-colors border border-slate-200"
+                              title="Koreksi Porsi / Catatan Penagihan"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>Koreksi</span>
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -466,8 +765,8 @@ export function BillingModule({ orders, onOrderUpdated }: BillingModuleProps) {
         </div>
       </div>
 
-      {/* Modal: Adjust Billing & Portions with Audit Trail */}
-      {selectedOrderForAdjust && (
+      {/* Modal: Adjust Billing & Portions with Audit Trail (Khusus Ahli Gizi & Admin) */}
+      {!isProvider && selectedOrderForAdjust && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl animate-in fade-in-50 text-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">

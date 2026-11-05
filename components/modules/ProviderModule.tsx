@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MealOrder, MealSchedule } from '@/types/nutrition';
+import { MealOrder, MealSchedule, Patient } from '@/types/nutrition';
 import { DbStore } from '@/lib/db-store';
-import { formatJakartaDate, formatRupiah } from '@/lib/date-utils';
+import { formatJakartaDate, formatRupiah, calculateInpatientStayDay, cleanAndFormatWaPhone, getAppPublicUrl } from '@/lib/date-utils';
 import {
   Truck,
   CheckCircle,
@@ -17,6 +17,10 @@ import {
   Sun,
   Sunset,
   Moon,
+  Calendar,
+  Bed,
+  PlusCircle,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface ProviderModuleProps {
@@ -27,6 +31,9 @@ interface ProviderModuleProps {
 export function ProviderModule({ orders, onOrderUpdated }: ProviderModuleProps) {
   const db = DbStore.getInstance();
   const [selectedOrder, setSelectedOrder] = useState<MealOrder | null>(null);
+
+  // Tab: Antrean Dapur vs Daftar Pasien Aktif Rawat
+  const [activeTab, setActiveTab] = useState<'ORDERS' | 'ACTIVE_PATIENTS'>('ORDERS');
 
   // Reject modal
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -39,21 +46,70 @@ export function ProviderModule({ orders, onOrderUpdated }: ProviderModuleProps) 
   const [courierName, setCourierName] = useState('Supriyanto (Kurir Katering)');
   const [shippingNotes, setShippingNotes] = useState('Makanan dikemas dalam wadah termal food grade hangat');
 
-  // Filter provider orders
-  const providerOrders = orders.filter((o) =>
-    [
+  // Direct meal dispatch modal for active inpatients (still admitted, not discharged)
+  const [showDirectDispatchModal, setShowDirectDispatchModal] = useState(false);
+  const [targetPatientForDispatch, setTargetPatientForDispatch] = useState<Patient | null>(null);
+  const [directSchedule, setDirectSchedule] = useState<MealSchedule>('SIANG');
+  const [directPortion, setDirectPortion] = useState(1);
+  const [directNotes, setDirectNotes] = useState('Disajikan hangat higienis sesuai preskripsi gizi');
+  const [directCourier, setDirectCourier] = useState('Supriyanto (Kurir Katering)');
+
+  // Pasien yang berstatus belum dipulangkan oleh Ahli Gizi / DPJP
+  const allPatients = db.getPatients();
+  const activeInpatients = allPatients.filter((p) => p.status !== 'DISCHARGED');
+
+  // Filter provider orders - Pasien yang SUDAH DIPULANGKAN otomatis hilang dari antrean dapur
+  const providerOrders = orders.filter((o) => {
+    const pt = db.getPatientById(o.patientId);
+    if (pt?.status === 'DISCHARGED') return false; // Hilang dari antrean dapur jika pasien sudah dipulangkan
+    return [
       'SENT_TO_PROVIDER',
       'PROVIDER_ACCEPTED',
       'FOOD_PREPARATION',
       'READY_TO_DELIVER',
       'IN_DELIVERY',
       'RECEIVED_BY_WAITER',
-    ].includes(o.status)
-  );
+    ].includes(o.status);
+  });
+
+  const handleOpenDirectDispatch = (patient: Patient, schedule: MealSchedule = 'SIANG') => {
+    setTargetPatientForDispatch(patient);
+    setDirectSchedule(schedule);
+    setDirectPortion(1);
+    setDirectNotes(`Menu ${schedule} disiapkan dapur katering sesuai preskripsi gizi`);
+    setDirectCourier('Supriyanto (Kurir Katering)');
+    setShowDirectDispatchModal(true);
+  };
+
+  const handleSubmitDirectDispatch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetPatientForDispatch) return;
+    if (!directCourier.trim()) {
+      alert('Nama petugas kurir pengantar wajib diisi.');
+      return;
+    }
+
+    const res = db.createAndShipMealByProvider({
+      patientId: targetPatientForDispatch.id,
+      schedule: directSchedule,
+      portionCount: directPortion,
+      courierName: directCourier.trim(),
+      notes: directNotes.trim(),
+    });
+
+    if (!res.success) {
+      alert(res.message);
+      return;
+    }
+
+    setShowDirectDispatchModal(false);
+    setTargetPatientForDispatch(null);
+    onOrderUpdated();
+    alert(`Pengiriman ${directSchedule} untuk pasien ${targetPatientForDispatch.name} (${targetPatientForDispatch.mrn}) berhasil dikirim ke Puskesmas!`);
+  };
 
   const handleAcceptOrder = (orderId: string) => {
     db.providerRespondOrder(orderId, true);
-    // Directly start preparation for instant kitchen workflow
     db.providerStartPreparation(orderId);
     onOrderUpdated();
   };
@@ -90,6 +146,27 @@ export function ProviderModule({ orders, onOrderUpdated }: ProviderModuleProps) 
     onOrderUpdated();
   };
 
+  const handleNotifyPjlpViaWa = (order: MealOrder, courierNameParam?: string) => {
+    const allUsers = db.getUsers();
+    const pjlp = allUsers.find((u) => u.role === 'PJLP_PRAMUSAJI' && u.status === 'ACTIVE' && u.phoneNumber) ||
+                 allUsers.find((u) => u.role === 'PJLP_PRAMUSAJI' && u.phoneNumber);
+    const phone = cleanAndFormatWaPhone(pjlp?.phoneNumber, '6281398765432');
+    const appUrl = getAppPublicUrl();
+    const message =
+      `*PENGIRIMAN MAKANAN PASIEN RAWAT INAP*\n` +
+      `Dari Dapur Penyedia (CV Berkah Bahari)\n\n` +
+      `Pasien: *${order.patientName}* (RM: ${order.patientMrn})\n` +
+      `Ruang/Bed: *${order.room} (${order.bed})*\n` +
+      `Jadwal: *${order.schedule}*\n` +
+      `Menu/Diet: *${order.menuName || order.dietTypeName}*\n` +
+      `Jumlah: *${order.portionCount} Porsi*\n` +
+      `Kurir Pengantar: *${courierNameParam || order.courierName || 'Kurir Katering'}*\n\n` +
+      `🔗 *Buka Aplikasi untuk Penerimaan & Etiket:* ${appUrl}\n\n` +
+      `Mohon PJLP Pramusaji bersiap menerima baki makanan hangat di bangsal rawat inap. Terima kasih!`;
+    const waUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank');
+  };
+
   const handleConfirmReject = () => {
     if (!selectedOrder) return;
     if (!rejectReason.trim()) {
@@ -122,174 +199,344 @@ export function ProviderModule({ orders, onOrderUpdated }: ProviderModuleProps) 
         </div>
       </div>
 
-      {/* Orders List */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 font-semibold text-xs text-slate-800 flex items-center justify-between">
-          <span>Daftar Pesanan Pasien yang Siap / Sedang Diproses Dapur</span>
-          <span className="font-mono text-slate-500">{providerOrders.length} Pesanan Aktif</span>
-        </div>
+      {/* Navigation Tabs */}
+      <div className="flex border-b border-slate-200 gap-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab('ORDERS')}
+          className={`pb-2.5 px-3 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+            activeTab === 'ORDERS'
+              ? 'border-teal-700 text-teal-800'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Package className="w-4 h-4" />
+          <span>Antrean Masak &amp; Kirim</span>
+          <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] bg-teal-100 text-teal-800">
+            {providerOrders.length}
+          </span>
+        </button>
 
-        {providerOrders.length === 0 ? (
-          <div className="py-12 text-center text-slate-400 text-xs">
-            Tidak ada pesanan aktif untuk penyedia makanan saat ini.
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {providerOrders.map((order) => {
-              const isNew = order.status === 'SENT_TO_PROVIDER';
-              const isInPreparation = ['PROVIDER_ACCEPTED', 'FOOD_PREPARATION', 'READY_TO_DELIVER'].includes(order.status);
-              const isInDelivery = order.status === 'IN_DELIVERY';
-              const isReceived = order.status === 'RECEIVED_BY_WAITER';
-              const patient = db.getPatientById(order.patientId);
-              const isPatientDischarged = patient?.status === 'DISCHARGED' || order.status === 'CANCELLED';
-
-              return (
-                <div key={order.id} className="p-4 hover:bg-slate-50/70 transition-colors space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-teal-800">{order.orderNumber}</span>
-                      <span className="text-slate-400">·</span>
-                      <span className="font-semibold text-slate-900">{order.patientName}</span>
-                      <span className="text-slate-400">·</span>
-                      <span className="text-slate-600">{order.room} ({order.bed})</span>
-                    </div>
-                    <span className="px-2.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-800">
-                      {order.status}
-                    </span>
-                  </div>
-
-                  {/* Order Specs */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <div>
-                      <span className="text-slate-400 text-[11px] block">Jadwal & Menu:</span>
-                      <strong className="text-slate-800">{order.menuName || 'Menu Sesuai Diet'}</strong>
-                      <p className="text-[11px] text-teal-800 font-medium">
-                        Jadwal: {order.selectedSchedules?.join(', ') || order.schedule} ({order.texture})
-                      </p>
-                    </div>
-
-                    <div>
-                      <span className="text-slate-400 text-[11px] block">Pantangan Alergi Bahan:</span>
-                      <p className="font-bold text-rose-700">
-                        {order.allergies.length > 0 ? order.allergies.join(', ') : 'Nihil Alergi'}
-                      </p>
-                      {order.reviewNotes && (
-                        <p className="text-[11px] text-teal-800 mt-0.5 italic">Catatan Gizi: {order.reviewNotes}</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <span className="text-slate-400 text-[11px] block">Porsi & Nilai Kontrak:</span>
-                      <p className="font-bold text-slate-900 font-mono">
-                        {order.portionCount} porsi
-                      </p>
-                      <p className="text-teal-800 font-semibold font-mono text-[11px]">
-                        Subtotal: {formatRupiah(order.totalEstimatedPrice)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Action buttons with 3 meal categories */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100">
-                    <span className="text-[11px] text-slate-400 font-mono">
-                      Pelayanan: {formatJakartaDate(order.serviceDate)} (Asia/Jakarta)
-                    </span>
-
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {isNew && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedOrder(order);
-                              setShowRejectModal(true);
-                            }}
-                            className="px-3 py-1.5 text-xs text-rose-700 hover:bg-rose-50 border border-rose-200 rounded font-medium transition-colors"
-                          >
-                            Tolak Pesanan
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleAcceptOrder(order.id)}
-                            className="px-4 py-1.5 text-xs text-white bg-teal-700 hover:bg-teal-800 rounded font-semibold shadow-sm transition-colors flex items-center gap-1.5"
-                          >
-                            <Flame className="w-3.5 h-3.5" />
-                            <span>Terima & Langsung Kerjakan Dapur</span>
-                          </button>
-                        </>
-                      )}
-
-                      {isInPreparation && (
-                        isPatientDischarged ? (
-                          <div className="flex items-center gap-2 p-2 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-[11px] font-semibold">
-                            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                            <span>Pasien Sudah Pulang: Pengiriman makanan dihentikan oleh Ahli Gizi.</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {/* Option to send Sarapan */}
-                            <button
-                              type="button"
-                              onClick={() => handleOpenShipModal(order, 'SARAPAN')}
-                              className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-semibold inline-flex items-center gap-1 shadow-sm"
-                            >
-                              <Sun className="w-3 h-3" />
-                              <span>Kirim Sarapan Pagi</span>
-                            </button>
-
-                            {/* Option to send Siang */}
-                            <button
-                              type="button"
-                              onClick={() => handleOpenShipModal(order, 'SIANG')}
-                              className="px-2.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded text-[11px] font-semibold inline-flex items-center gap-1 shadow-sm"
-                            >
-                              <Sunset className="w-3 h-3" />
-                              <span>Kirim Makan Siang</span>
-                            </button>
-
-                            {/* Option to send Malam */}
-                            <button
-                              type="button"
-                              onClick={() => handleOpenShipModal(order, 'MALAM')}
-                              className="px-2.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded text-[11px] font-semibold inline-flex items-center gap-1 shadow-sm"
-                            >
-                              <Moon className="w-3 h-3" />
-                              <span>Kirim Makan Malam</span>
-                            </button>
-                          </div>
-                        )
-                      )}
-
-                      {isInDelivery && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-sky-800 bg-sky-50 px-3 py-1 rounded border border-sky-200 font-medium flex items-center gap-1.5">
-                            <Truck className="w-3.5 h-3.5" />
-                            <span>Kurir Di Jalan: {order.courierName}</span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenShipModal(order)}
-                            className="px-2.5 py-1 text-xs border border-sky-300 text-sky-700 hover:bg-sky-50 rounded"
-                          >
-                            + Tambah Pengiriman
-                          </button>
-                        </div>
-                      )}
-
-                      {isReceived && (
-                        <span className="text-xs text-emerald-800 bg-emerald-50 px-3 py-1 rounded border border-emerald-200 font-medium flex items-center gap-1.5">
-                          <CheckCircle className="w-3.5 h-3.5" />
-                          <span>Telah Diterima Pramusaji Puskesmas</span>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => setActiveTab('ACTIVE_PATIENTS')}
+          className={`pb-2.5 px-3 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+            activeTab === 'ACTIVE_PATIENTS'
+              ? 'border-teal-700 text-teal-800'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Bed className="w-4 h-4" />
+          <span>Daftar Pasien Rawat Inap Aktif (Belum Pulang)</span>
+          <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] bg-amber-100 text-amber-800 font-bold">
+            {activeInpatients.length} Pasien
+          </span>
+        </button>
       </div>
+
+      {activeTab === 'ORDERS' ? (
+        /* Orders List */
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 font-semibold text-xs text-slate-800 flex items-center justify-between">
+            <span>Daftar Pesanan Pasien yang Siap / Sedang Diproses Dapur</span>
+            <span className="font-mono text-slate-500">{providerOrders.length} Pesanan Aktif</span>
+          </div>
+
+          {providerOrders.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 text-xs">
+              Tidak ada pesanan aktif untuk penyedia makanan saat ini.
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {providerOrders.map((order) => {
+                const isNew = order.status === 'SENT_TO_PROVIDER';
+                const isInPreparation = ['PROVIDER_ACCEPTED', 'FOOD_PREPARATION', 'READY_TO_DELIVER'].includes(order.status);
+                const isInDelivery = order.status === 'IN_DELIVERY';
+                const isReceived = order.status === 'RECEIVED_BY_WAITER';
+                const patient = db.getPatientById(order.patientId);
+                const isPatientDischarged = patient?.status === 'DISCHARGED' || order.status === 'CANCELLED';
+                const stayDay = calculateInpatientStayDay(patient?.admissionDate, order.serviceDate);
+
+                return (
+                  <div key={order.id} className="p-4 hover:bg-slate-50/70 transition-colors space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono font-bold text-teal-800">{order.orderNumber}</span>
+                        <span className="text-slate-400">·</span>
+                        <span className="font-semibold text-slate-900">{order.patientName}</span>
+                        <span className="text-slate-400">·</span>
+                        <span className="text-slate-600">{order.room} ({order.bed})</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                          Hari ke-{stayDay} Rawat
+                        </span>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-800">
+                        {order.status}
+                      </span>
+                    </div>
+
+                    {/* Order Specs */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <div>
+                        <span className="text-slate-400 text-[11px] block">Jadwal &amp; Menu:</span>
+                        <strong className="text-slate-800">{order.menuName || 'Menu Sesuai Diet'}</strong>
+                        <p className="text-[11px] text-teal-800 font-medium">
+                          Jadwal: {order.selectedSchedules?.join(', ') || order.schedule} ({order.texture})
+                        </p>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-400 text-[11px] block">Pantangan Alergi Bahan:</span>
+                        <p className="font-bold text-rose-700">
+                          {order.allergies.length > 0 ? order.allergies.join(', ') : 'Nihil Alergi'}
+                        </p>
+                        {order.reviewNotes && (
+                          <p className="text-[11px] text-teal-800 mt-0.5 italic">Catatan Gizi: {order.reviewNotes}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <span className="text-slate-400 text-[11px] block">Porsi &amp; Nilai Kontrak:</span>
+                        <p className="font-bold text-slate-900 font-mono">
+                          {order.portionCount} porsi
+                        </p>
+                        <p className="text-teal-800 font-semibold font-mono text-[11px]">
+                          Subtotal: {formatRupiah(order.totalEstimatedPrice)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Action buttons with 3 meal categories */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                      <span className="text-[11px] text-slate-400 font-mono">
+                        Pelayanan: {formatJakartaDate(order.serviceDate)} (Asia/Jakarta)
+                      </span>
+
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {isNew && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedOrder(order);
+                                setShowRejectModal(true);
+                              }}
+                              className="px-3 py-1.5 text-xs text-rose-700 hover:bg-rose-50 border border-rose-200 rounded font-medium transition-colors"
+                            >
+                              Tolak Pesanan
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAcceptOrder(order.id)}
+                              className="px-4 py-1.5 text-xs text-white bg-teal-700 hover:bg-teal-800 rounded font-semibold shadow-sm transition-colors flex items-center gap-1.5"
+                            >
+                              <Flame className="w-3.5 h-3.5" />
+                              <span>Terima &amp; Langsung Kerjakan Dapur</span>
+                            </button>
+                          </>
+                        )}
+
+                        {isInPreparation && (
+                          isPatientDischarged ? (
+                            <div className="flex items-center gap-2 p-2 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-[11px] font-semibold">
+                              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                              <span>Pasien Sudah Pulang: Pengiriman makanan dihentikan oleh Ahli Gizi.</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {/* Option to send Sarapan */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenShipModal(order, 'SARAPAN')}
+                                className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-semibold inline-flex items-center gap-1 shadow-sm"
+                              >
+                                <Sun className="w-3 h-3" />
+                                <span>Kirim Sarapan Pagi</span>
+                              </button>
+
+                              {/* Option to send Siang */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenShipModal(order, 'SIANG')}
+                                className="px-2.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded text-[11px] font-semibold inline-flex items-center gap-1 shadow-sm"
+                              >
+                                <Sunset className="w-3 h-3" />
+                                <span>Kirim Makan Siang</span>
+                              </button>
+
+                              {/* Option to send Malam */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenShipModal(order, 'MALAM')}
+                                className="px-2.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded text-[11px] font-semibold inline-flex items-center gap-1 shadow-sm"
+                              >
+                                <Moon className="w-3 h-3" />
+                                <span>Kirim Makan Malam</span>
+                              </button>
+                            </div>
+                          )
+                        )}
+
+                        {isInDelivery && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs text-sky-800 bg-sky-50 px-3 py-1 rounded border border-sky-200 font-medium flex items-center gap-1.5">
+                              <Truck className="w-3.5 h-3.5" />
+                              <span>Kurir Di Jalan: {order.courierName}</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleNotifyPjlpViaWa(order)}
+                              className="px-2.5 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded font-medium inline-flex items-center gap-1 shadow-xs transition"
+                              title="Kirim notifikasi WhatsApp ke PJLP Pramusaji lengkap dengan link aplikasi"
+                            >
+                              <Send className="w-3 h-3" />
+                              <span>Notif WA ke Pramusaji</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenShipModal(order)}
+                              className="px-2.5 py-1 text-xs border border-sky-300 text-sky-700 hover:bg-sky-50 rounded"
+                            >
+                              + Tambah Pengiriman
+                            </button>
+                          </div>
+                        )}
+
+                        {isReceived && (
+                          <span className="text-xs text-emerald-800 bg-emerald-50 px-3 py-1 rounded border border-emerald-200 font-medium flex items-center gap-1.5">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            <span>Telah Diterima Pramusaji Puskesmas</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Tab: Active Inpatients */
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden space-y-3 p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Bed className="w-4 h-4 text-teal-700" />
+                <span>Pasien Rawat Inap Aktif (Berhak Makan Terus Sampai Status Pulang)</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Penyedia katering dapat langsung memasak dan mengirimkan Sarapan, Makan Siang, atau Makan Malam berkali-kali selama pasien belum dipulangkan oleh Ahli Gizi.
+              </p>
+            </div>
+            <div className="text-xs text-teal-800 bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-200 font-medium">
+              Tarif Resmi: Sarapan (Rp 25.000) · Siang &amp; Malam (Rp 47.000)
+            </div>
+          </div>
+
+          {activeInpatients.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 text-xs">
+              Tidak ada pasien rawat inap yang aktif saat ini.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {activeInpatients.map((patient) => {
+                const stayDay = calculateInpatientStayDay(patient.admissionDate);
+                const patientOrders = orders.filter((o) => o.patientId === patient.id);
+
+                return (
+                  <div
+                    key={patient.id}
+                    className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-teal-300 transition-all space-y-3 shadow-xs"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 text-sm">{patient.name}</span>
+                          <span className="text-[11px] font-mono text-slate-500">({patient.mrn})</span>
+                        </div>
+                        <p className="text-xs text-slate-600 mt-0.5 font-medium">
+                          {patient.room} · Bed: {patient.bed}
+                        </p>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 shadow-xs flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-amber-700" />
+                        <span>Hari ke-{stayDay} Rawat</span>
+                      </span>
+                    </div>
+
+                    <div className="text-xs space-y-1 bg-white p-2.5 rounded-lg border border-slate-100">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Tgl Masuk:</span>
+                        <span className="font-semibold text-slate-800">{formatJakartaDate(patient.admissionDate)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Bentuk Makanan:</span>
+                        <span className="font-semibold text-teal-800">{patient.dietaryRestrictions || 'Standar Makanan Biasa'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Pantangan Alergi:</span>
+                        <span className="font-bold text-rose-700">
+                          {patient.foodAllergies && patient.foodAllergies.length > 0 ? patient.foodAllergies.join(', ') : 'Nihil'}
+                        </span>
+                      </div>
+                      {patient.clinicalDiagnosis && (
+                        <p className="text-[11px] text-slate-500 italic pt-1 border-t border-slate-100">
+                          Diagnosis: {patient.clinicalDiagnosis}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+                      <span>Total Pesanan Tercatat: <strong className="text-slate-800 font-mono">{patientOrders.length}x</strong></span>
+                      <span className="text-emerald-700 font-medium">Status: Aktif Rawat</span>
+                    </div>
+
+                    {/* Quick send buttons */}
+                    <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDirectDispatch(patient, 'SARAPAN')}
+                        className="p-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-center transition-colors shadow-xs"
+                      >
+                        <div className="flex items-center justify-center gap-1 text-[11px] font-bold">
+                          <Sun className="w-3 h-3" />
+                          <span>Sarapan</span>
+                        </div>
+                        <span className="text-[10px] text-amber-100 block font-mono">Rp 25.000</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDirectDispatch(patient, 'SIANG')}
+                        className="p-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-center transition-colors shadow-xs"
+                      >
+                        <div className="flex items-center justify-center gap-1 text-[11px] font-bold">
+                          <Sunset className="w-3 h-3" />
+                          <span>Makan Siang</span>
+                        </div>
+                        <span className="text-[10px] text-teal-100 block font-mono">Rp 47.000</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDirectDispatch(patient, 'MALAM')}
+                        className="p-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-center transition-colors shadow-xs"
+                      >
+                        <div className="flex items-center justify-center gap-1 text-[11px] font-bold">
+                          <Moon className="w-3 h-3" />
+                          <span>Makan Malam</span>
+                        </div>
+                        <span className="text-[10px] text-indigo-100 block font-mono">Rp 47.000</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Shipping Modal with Sarapan / Siang / Malam Category */}
       {showShipModal && selectedOrder && (
@@ -410,6 +657,163 @@ export function ProviderModule({ orders, onOrderUpdated }: ProviderModuleProps) 
                   className="px-4 py-2 bg-sky-700 hover:bg-sky-800 text-white rounded-lg font-semibold shadow-sm transition-colors"
                 >
                   Kirim {shipCategory} Sekarang
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Direct Dispatch Modal for Active Inpatients */}
+      {showDirectDispatchModal && targetPatientForDispatch && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl animate-in fade-in-50 text-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                <ChefHat className="w-4 h-4 text-teal-700" />
+                <span>Kirim Makanan Dapur Langsung ke Pasien</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowDirectDispatchModal(false)}
+                className="text-slate-400 hover:text-slate-700 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3 bg-teal-50/70 border border-teal-200 rounded-xl space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-900">{targetPatientForDispatch.name}</span>
+                <span className="font-mono text-slate-600">{targetPatientForDispatch.mrn}</span>
+              </div>
+              <p className="text-slate-600">
+                Ruangan: <strong>{targetPatientForDispatch.room} ({targetPatientForDispatch.bed})</strong>
+              </p>
+              <div className="flex items-center justify-between pt-1 text-[11px]">
+                <span className="text-amber-800 font-bold">
+                  Hari ke-{calculateInpatientStayDay(targetPatientForDispatch.admissionDate)} Rawat Inap
+                </span>
+                <span className="text-teal-800 font-medium">Diet: {targetPatientForDispatch.dietaryRestrictions || 'Standar Makanan Biasa'}</span>
+              </div>
+              {targetPatientForDispatch.foodAllergies && targetPatientForDispatch.foodAllergies.length > 0 && (
+                <p className="text-rose-700 font-bold text-[11px]">
+                  Alergi: {targetPatientForDispatch.foodAllergies.join(', ')}
+                </p>
+              )}
+            </div>
+
+            <form onSubmit={handleSubmitDirectDispatch} className="space-y-3">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Pilih Kategori Jadwal Makanan *</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDirectSchedule('SARAPAN')}
+                    className={`p-2.5 rounded-lg border text-center transition-all ${
+                      directSchedule === 'SARAPAN'
+                        ? 'border-amber-600 bg-amber-50 text-amber-900 font-bold ring-1 ring-amber-600'
+                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <Sun className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Sarapan</span>
+                    </div>
+                    <span className="text-[10px] text-amber-700 block font-mono mt-0.5">Rp 25.000</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDirectSchedule('SIANG')}
+                    className={`p-2.5 rounded-lg border text-center transition-all ${
+                      directSchedule === 'SIANG'
+                        ? 'border-teal-600 bg-teal-50 text-teal-900 font-bold ring-1 ring-teal-600'
+                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <Sunset className="w-3.5 h-3.5 text-teal-600" />
+                      <span>Siang</span>
+                    </div>
+                    <span className="text-[10px] text-teal-700 block font-mono mt-0.5">Rp 47.000</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDirectSchedule('MALAM')}
+                    className={`p-2.5 rounded-lg border text-center transition-all ${
+                      directSchedule === 'MALAM'
+                        ? 'border-indigo-600 bg-indigo-50 text-indigo-900 font-bold ring-1 ring-indigo-600'
+                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <Moon className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Malam</span>
+                    </div>
+                    <span className="text-[10px] text-indigo-700 block font-mono mt-0.5">Rp 47.000</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Jumlah Porsi *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={directPortion}
+                    onChange={(e) => setDirectPortion(parseInt(e.target.value) || 1)}
+                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg font-mono text-xs"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Nilai Tagihan</label>
+                  <div className="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg font-mono font-bold text-teal-800 text-xs">
+                    {formatRupiah((directSchedule === 'SARAPAN' ? 25000 : 47000) * directPortion)}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Petugas Kurir Pengantar *</label>
+                <input
+                  type="text"
+                  value={directCourier}
+                  onChange={(e) => setDirectCourier(e.target.value)}
+                  placeholder="Nama kurir pengantar"
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Catatan Menu / Kemasan</label>
+                <input
+                  type="text"
+                  value={directNotes}
+                  onChange={(e) => setDirectNotes(e.target.value)}
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowDirectDispatchModal(false)}
+                  className="px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg font-semibold shadow-sm transition-colors flex items-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Kirim {directSchedule} Sekarang</span>
                 </button>
               </div>
             </form>

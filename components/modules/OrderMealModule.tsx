@@ -10,6 +10,7 @@ import {
   formatRupiah,
   getTodayISODateJakarta,
   cleanAndFormatWaPhone,
+  getAppPublicUrl,
 } from '@/lib/date-utils';
 import { SopProgressBar } from '@/components/common/SopProgressBar';
 import {
@@ -72,6 +73,7 @@ export function OrderMealModule({
     : { years: 0, months: 0, displayText: '-' };
 
   const generateWhatsAppMessage = (order: MealOrder) => {
+    const appUrl = getAppPublicUrl();
     return (
       `*ORDER MAKAN RAWAT INAP PUSKESMAS KEPULAUAN SERIBU*\n\n` +
       `No. Order: *${order.orderNumber}*\n` +
@@ -84,6 +86,7 @@ export function OrderMealModule({
       `Catatan Klinis: ${order.specialClinicalNotes || '-'}\n` +
       `Pemesan: ${order.orderedByName} (${order.orderedByRole})\n` +
       `Waktu Order: ${formatJakartaDateTime(order.createdAt)}\n\n` +
+      `🔗 *Buka & Verifikasi Aplikasi:* ${appUrl}\n\n` +
       `Mohon diverifikasi di aplikasi SI PANTAI GIZI. Terima kasih!`
     );
   };

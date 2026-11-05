@@ -304,11 +304,15 @@ export function GasSettingsModule() {
     setTimeout(() => setCopiedCode(false), 2500);
   };
 
-  const handleResetData = () => {
-    if (confirm('Apakah Anda yakin ingin mengatur ulang data demo ke kondisi awal Puskesmas?')) {
-      db.resetToInitialSeedData();
-      alert('Data berhasil direset.');
-      window.location.reload();
+  const handlePullRealData = async () => {
+    if (confirm('Tarik seluruh data real terkini dari Google Spreadsheet (GAS)? Data pengguna, pasien, pesanan, dan master data akan disinkronkan langsung dari Spreadsheet.')) {
+      setIsSyncing(true);
+      const res = await db.pullLiveDatabaseFromGas();
+      setIsSyncing(false);
+      alert(res.message);
+      if (res.success) {
+        window.location.reload();
+      }
     }
   };
 
@@ -320,7 +324,7 @@ export function GasSettingsModule() {
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-emerald-700" />
-              <span>Pengaturan Integrasi Google Apps Script (GAS), Google Sheets & Drive</span>
+              <span>Pengaturan Integrasi Google Apps Script (GAS), Google Sheets &amp; Drive</span>
             </h2>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
               Khusus Administrator
@@ -333,11 +337,11 @@ export function GasSettingsModule() {
 
         <button
           type="button"
-          onClick={handleResetData}
-          className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition-colors self-start sm:self-auto"
+          onClick={handlePullRealData}
+          className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm transition-colors self-start sm:self-auto"
         >
           <RotateCcw className="w-3.5 h-3.5" />
-          <span>Reset Data Demo Awal</span>
+          <span>Tarik Data Real dari Spreadsheet (GAS)</span>
         </button>
       </div>
 

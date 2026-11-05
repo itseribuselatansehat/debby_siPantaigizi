@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { MealOrder, Patient } from '@/types/nutrition';
-import { formatJakartaDate, formatRupiah } from '@/lib/date-utils';
+import { formatJakartaDate, formatRupiah, calculateInpatientStayDay } from '@/lib/date-utils';
 import {
   FileText,
   Printer,
@@ -430,6 +430,7 @@ export function ReportsModule({ orders, patients }: ReportsModuleProps) {
                     );
                     const { sarapan, siang, malam, totalPortions, totalCost } = calculatePatientRecap(patientOrders);
                     const isDischarged = p.status === 'DISCHARGED';
+                    const stayDay = calculateInpatientStayDay(p.admissionDate);
 
                     return (
                       <tr key={p.id} className="hover:bg-slate-50">
@@ -441,6 +442,9 @@ export function ReportsModule({ orders, patients }: ReportsModuleProps) {
                             isDischarged ? 'bg-slate-100 text-slate-700' : 'bg-emerald-100 text-emerald-800'
                           }`}>
                             {isDischarged ? 'SUDAH PULANG' : 'AKTIF RAWAT'}
+                          </span>
+                          <span className="text-[10px] text-amber-800 font-bold block mt-0.5">
+                            Hari ke-{stayDay}
                           </span>
                         </td>
                         <td className="py-2 px-3 text-center font-bold text-amber-900 bg-amber-50/30 font-mono">

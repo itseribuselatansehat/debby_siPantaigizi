@@ -211,7 +211,7 @@ async function applyTimestampWatermark(imageSrc: string): Promise<string> {
     setDriveUploadStatus({
       success: true,
       fileUrl: url,
-      message: 'Foto sampel demo digunakan',
+      message: 'Foto sampel standar baki digunakan',
     });
     onPhotoSelected(url);
     setShowPresets(false);
@@ -238,7 +238,7 @@ async function applyTimestampWatermark(imageSrc: string): Promise<string> {
           onClick={() => setShowPresets(!showPresets)}
           className="text-xs text-teal-700 hover:text-teal-800 underline font-medium"
         >
-          {showPresets ? 'Tutup Preset' : 'Gunakan Foto Demo'}
+          {showPresets ? 'Tutup Preset' : 'Pilih Sampel Foto'}
         </button>
       </div>
 

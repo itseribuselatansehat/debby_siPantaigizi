@@ -357,6 +357,10 @@ export class DbStore {
     }
   }
 
+  public triggerManualSyncToGas() {
+    this.triggerBackgroundGasSync(true);
+  }
+
   /**
    * Tarik seluruh data real dari Google Spreadsheet sekarang
    */
@@ -966,6 +970,127 @@ export class DbStore {
     return { success: true, order: newOrder };
   }
 
+  /**
+   * Pengiriman makanan langsung dari Dapur Katering untuk pasien rawat inap yang masih aktif dirawat
+   * Sebelum dipulangkan oleh Ahli Gizi / Dokter DPJP, pasien terus berhak menerima makan (Sarapan, Siang, Malam).
+   */
+  public createAndShipMealByProvider(params: {
+    patientId: string;
+    schedule: MealSchedule;
+    serviceDate?: string;
+    portionCount?: number;
+    courierName: string;
+    notes?: string;
+    menuName?: string;
+  }): { success: boolean; message?: string; order?: MealOrder } {
+    const patient = this.getPatientById(params.patientId);
+    if (!patient) return { success: false, message: 'Data pasien tidak ditemukan.' };
+
+    if (patient.status === 'DISCHARGED') {
+      return {
+        success: false,
+        message: `Pasien ${patient.name} (${patient.mrn}) sudah resmi dipulangkan oleh Ahli Gizi / DPJP. Penyedia katering tidak dapat lagi mengirimkan makanan.`,
+      };
+    }
+
+    const serviceDate = params.serviceDate || getTodayISODateJakarta();
+    const age = calculateAgeAtDate(patient.birthDate, serviceDate);
+    const orderDateClean = serviceDate.replace(/-/g, '');
+    const seq = String(this.state.orders.length + 1).padStart(3, '0');
+    const orderNumber = `ORD-${orderDateClean}-${seq}`;
+    const nowIso = new Date().toISOString();
+
+    const provider = this.state.providers[0];
+    const portionCount = params.portionCount || 1;
+
+    // Hitung tarif resmi: Sarapan 25.000, Siang 47.000, Malam 47.000
+    let unitTariff = 25000;
+    if (params.schedule === 'SARAPAN') unitTariff = 25000;
+    else if (params.schedule === 'SIANG') unitTariff = 47000;
+    else if (params.schedule === 'MALAM') unitTariff = 47000;
+
+    const totalCost = unitTariff * portionCount;
+
+    const defaultMenu = params.menuName || (
+      params.schedule === 'SARAPAN'
+        ? 'Paket Sarapan Pagi Bergizi'
+        : params.schedule === 'SIANG'
+        ? 'Paket Makan Siang Seimbang'
+        : 'Paket Makan Malam Rawat Inap'
+    );
+
+    const newOrder: MealOrder = {
+      id: orderNumber,
+      orderNumber,
+      createdAt: nowIso,
+      serviceDate,
+      schedule: params.schedule,
+      selectedSchedules: [params.schedule],
+      patientId: patient.id,
+      patientMrn: patient.mrn,
+      patientName: patient.name,
+      patientAgeYears: age.years,
+      patientAgeMonths: age.months,
+      room: patient.room,
+      bed: patient.bed,
+      medicalDiagnosis: patient.clinicalDiagnosis,
+      allergies: patient.foodAllergies,
+      dietTypeName: patient.dietaryRestrictions || 'Diet Makanan Biasa Rawat Inap',
+      texture: 'Biasa',
+      menuId: undefined,
+      menuName: defaultMenu,
+      portionCount,
+      pricePerPortionSnapshot: unitTariff,
+      totalEstimatedPrice: totalCost,
+      specialClinicalNotes: params.notes,
+      orderedByUserId: this.state.currentUser.id,
+      orderedByName: this.state.currentUser.name || 'Dapur Penyedia Katering',
+      orderedByRole: this.state.currentUser.role || 'PENYEDIA',
+      providerId: provider?.id,
+      providerName: provider?.name || 'CV Berkah Bahari',
+      billingStatus: 'MENUNGGU_VERIFIKASI',
+      billedPortionCount: portionCount,
+      finalBilledAmount: totalCost,
+      status: 'IN_DELIVERY',
+      shippedPortionCount: portionCount,
+      courierName: params.courierName,
+      shippedAt: nowIso,
+      statusHistory: [
+        {
+          status: 'FOOD_PREPARATION',
+          timestamp: nowIso,
+          changedBy: this.state.currentUser.name,
+          role: 'PENYEDIA',
+          reasonOrNotes: `Makanan ${params.schedule} dipersiapkan di dapur katering (Tarif: Rp ${unitTariff.toLocaleString('id-ID')}/porsi)`,
+        },
+        {
+          status: 'READY_TO_DELIVER',
+          timestamp: nowIso,
+          changedBy: this.state.currentUser.name,
+          role: 'PENYEDIA',
+          reasonOrNotes: 'Makanan selesai dikemas dan siap diantar kurir',
+        },
+        {
+          status: 'IN_DELIVERY',
+          timestamp: nowIso,
+          changedBy: this.state.currentUser.name,
+          role: 'PENYEDIA',
+          reasonOrNotes: `Kurir ${params.courierName} mengirim ${portionCount} porsi ke Puskesmas. ${params.notes || ''}`,
+        },
+      ],
+    };
+
+    this.state.orders.unshift(newOrder);
+    this.logAudit(
+      'PROVIDER_DISPATCH_MEAL',
+      'Penyedia Makanan',
+      newOrder.orderNumber,
+      `Penyedia mengirim makanan ${params.schedule} untuk pasien ${patient.name} (${patient.mrn}) ruang ${patient.room}. Kurir: ${params.courierName}`
+    );
+    this.saveState();
+    return { success: true, order: newOrder };
+  }
+
   public cancelOrder(orderId: string, reason: string): { success: boolean; message?: string } {
     const order = this.getOrderById(orderId);
     if (!order) return { success: false, message: 'Order tidak ditemukan' };
@@ -1278,8 +1403,23 @@ export class DbStore {
     order.status = 'DELIVERED_TO_PATIENT';
     
     // Default billing readiness once safely delivered
-    order.billedPortionCount = order.portionCount;
-    order.finalBilledAmount = order.pricePerPortionSnapshot * order.portionCount;
+    let unitTariff = order.pricePerPortionSnapshot || 0;
+    if (unitTariff <= 0) {
+      const schedules = (order.selectedSchedules && order.selectedSchedules.length > 0)
+        ? order.selectedSchedules
+        : [order.schedule || 'SIANG'];
+      unitTariff = 0;
+      schedules.forEach((sch) => {
+        if (sch === 'SARAPAN') unitTariff += 25000;
+        else if (sch === 'SIANG') unitTariff += 47000;
+        else if (sch === 'MALAM') unitTariff += 47000;
+        else unitTariff += 25000;
+      });
+      order.pricePerPortionSnapshot = unitTariff;
+    }
+    const portions = order.portionCount || 1;
+    order.billedPortionCount = portions;
+    order.finalBilledAmount = unitTariff * portions;
     order.billingStatus = 'MENUNGGU_VERIFIKASI';
 
     order.statusHistory.push(
@@ -1402,9 +1542,23 @@ export class DbStore {
     const order = this.getOrderById(orderId);
     if (!order) return;
 
+    let unitTariff = order.pricePerPortionSnapshot || 0;
+    if (unitTariff <= 0) {
+      const schedules = (order.selectedSchedules && order.selectedSchedules.length > 0)
+        ? order.selectedSchedules
+        : [order.schedule || 'SIANG'];
+      unitTariff = 0;
+      schedules.forEach((sch) => {
+        if (sch === 'SARAPAN') unitTariff += 25000;
+        else if (sch === 'SIANG') unitTariff += 47000;
+        else if (sch === 'MALAM') unitTariff += 47000;
+        else unitTariff += 25000;
+      });
+      order.pricePerPortionSnapshot = unitTariff;
+    }
     const oldAmount = order.finalBilledAmount;
     order.billedPortionCount = billedPortionCount;
-    order.finalBilledAmount = order.pricePerPortionSnapshot * billedPortionCount;
+    order.finalBilledAmount = unitTariff * billedPortionCount;
     order.billingNotes = billingNotes;
 
     this.logAudit(
@@ -1416,20 +1570,70 @@ export class DbStore {
     this.saveState();
   }
 
-  // Reset demo state
-  public resetToInitialSeedData() {
-    this.state = {
-      users: INITIAL_USERS,
-      currentUser: INITIAL_USERS[3],
-      patients: INITIAL_PATIENTS,
-      rooms: INITIAL_ROOMS,
-      dietTypes: INITIAL_DIET_TYPES,
-      menus: INITIAL_MENUS,
-      providers: INITIAL_PROVIDERS,
-      orders: INITIAL_MEAL_ORDERS,
-      auditLogs: INITIAL_AUDIT_LOGS,
-      settings: INITIAL_APP_SETTINGS,
-    };
+  /**
+   * Setujui tagihan sebagai tagihan yang sudah sesuai dengan SPJ kenyataan
+   */
+  public approveBillingSpj(orderId: string, notes?: string): { success: boolean; message: string } {
+    const order = this.getOrderById(orderId);
+    if (!order) return { success: false, message: 'Data pesanan/tagihan tidak ditemukan.' };
+
+    const approverName = this.state.currentUser.name || 'Verifikator Tagihan';
+    const nowIso = new Date().toISOString();
+
+    order.billingStatus = 'SESUAI_SPJ_KENYATAAN';
+    order.spjApprovedAt = nowIso;
+    order.spjApprovedByName = approverName;
+    if (notes && notes.trim()) {
+      order.billingNotes = notes.trim();
+    } else if (!order.billingNotes) {
+      order.billingNotes = 'Disetujui sudah sesuai tagihan & SPJ kenyataan';
+    }
+
+    this.logAudit(
+      'APPROVE_BILLING_SPJ',
+      'Rekap Tagihan Penyedia',
+      order.orderNumber,
+      `Tagihan ${order.orderNumber} disetujui sudah sesuai tagihan & SPJ kenyataan oleh ${approverName}`
+    );
     this.saveState();
+    return { success: true, message: `Tagihan ${order.orderNumber} berhasil disetujui sudah sesuai dengan SPJ kenyataan!` };
+  }
+
+  /**
+   * Setujui banyak tagihan sekaligus sebagai sesuai SPJ kenyataan
+   */
+  public approveAllBillingsSpj(orderIds: string[]): { success: boolean; count: number; message: string } {
+    const approverName = this.state.currentUser.name || 'Verifikator Tagihan';
+    const nowIso = new Date().toISOString();
+    let approvedCount = 0;
+
+    orderIds.forEach((id) => {
+      const order = this.getOrderById(id);
+      if (order && order.billingStatus !== 'SESUAI_SPJ_KENYATAAN') {
+        order.billingStatus = 'SESUAI_SPJ_KENYATAAN';
+        order.spjApprovedAt = nowIso;
+        order.spjApprovedByName = approverName;
+        if (!order.billingNotes) {
+          order.billingNotes = 'Disetujui sudah sesuai tagihan & SPJ kenyataan';
+        }
+        approvedCount++;
+      }
+    });
+
+    if (approvedCount > 0) {
+      this.logAudit(
+        'APPROVE_BILLING_SPJ_BULK',
+        'Rekap Tagihan Penyedia',
+        `${approvedCount} Transaksi`,
+        `${approvedCount} tagihan disetujui sudah sesuai tagihan & SPJ kenyataan secara kolektif oleh ${approverName}`
+      );
+      this.saveState();
+    }
+
+    return {
+      success: true,
+      count: approvedCount,
+      message: `${approvedCount} tagihan berhasil disetujui sesuai SPJ kenyataan!`,
+    };
   }
 }

@@ -218,10 +218,12 @@ export interface MealOrder {
   };
 
   // Billing status
-  billingStatus: 'BELUM_DIREKAP' | 'MENUNGGU_VERIFIKASI' | 'TERVERIFIKASI' | 'DIBAYAR' | 'TIDAK_DAPAT_DITAGIHKAN';
+  billingStatus: 'BELUM_DIREKAP' | 'MENUNGGU_VERIFIKASI' | 'TERVERIFIKASI' | 'DIBAYAR' | 'TIDAK_DAPAT_DITAGIHKAN' | 'SESUAI_SPJ_KENYATAAN';
   billedPortionCount: number;
   finalBilledAmount: number;
   billingNotes?: string;
+  spjApprovedAt?: string;
+  spjApprovedByName?: string;
   cancellationReason?: string;
 
   // SOP State

@@ -116,3 +116,28 @@ export function cleanAndFormatWaPhone(phone?: string, fallback: string = ''): st
   return cleaned;
 }
 
+/**
+ * Hitung hari rawat berjalan (Hari ke-1, Hari ke-2, dst.)
+ * Berdasarkan admissionDate sampai tanggal pelayanan / tanggal hari ini
+ */
+export function calculateInpatientStayDay(admissionDateStr?: string, targetDateStr?: string): number {
+  if (!admissionDateStr) return 1;
+  const adm = new Date(admissionDateStr.slice(0, 10));
+  const target = new Date((targetDateStr || getTodayISODateJakarta()).slice(0, 10));
+  if (isNaN(adm.getTime()) || isNaN(target.getTime())) return 1;
+  const diffTime = target.getTime() - adm.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  return Math.max(1, diffDays);
+}
+
+/**
+ * Dapatkan URL publik aplikasi untuk disematkan dalam tautan pesan WhatsApp
+ * agar penerima dapat langsung mengklik dan membuka aplikasi SI PANTAI GIZI
+ */
+export function getAppPublicUrl(): string {
+  if (typeof window !== 'undefined' && window.location.origin) {
+    return window.location.origin;
+  }
+  return 'https://sipantaigizi.puskesmasseribuselatan.com';
+}
+

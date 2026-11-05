@@ -27,6 +27,7 @@ import {
   UserCheck,
   KeyRound,
   AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -403,293 +404,364 @@ export function LandingPage({ onLoginAsUser }: LandingPageProps) {
         </div>
       </section>
 
-      {/* Quick Login Section */}
+      {/* Official Database Login Portal */}
+      {/* Official Database Login Portal */}
       <section id="login-users" className="py-16 sm:py-24 bg-slate-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <div className="text-center max-w-3xl mx-auto space-y-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-teal-800 bg-teal-50 border border-teal-200 px-3 py-1 rounded-full">
-              Portal Akses Petugas
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+          <div className="text-center max-w-2xl mx-auto space-y-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-teal-800 bg-teal-50 border border-teal-200 px-3.5 py-1 rounded-full inline-flex items-center gap-1.5 shadow-2xs">
+              <ShieldCheck className="w-3.5 h-3.5 text-teal-700" />
+              <span>Portal Masuk Resmi SI PANTAI GIZI</span>
             </span>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-              Pilih Akun Petugas Masuk
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+              Masuk ke Sistem Pelayanan Gizi
             </h2>
             <p className="text-xs sm:text-sm text-slate-600">
-              Untuk kelancaran operasional harian, petugas pelaksana (Dokter, Perawat, Penyedia Makanan, dan Pramusaji) dapat masuk langsung dengan 1-klik. Akun <strong>Administrator</strong> dan <strong>Ahli Gizi</strong> disembunyikan dan diwajibkan menggunakan login manual dengan kata sandi.
+              Dokter, Perawat, PJLP Pramusaji, dan Penyedia Katering dapat <strong>langsung masuk tanpa password</strong>. Khusus Admin dan Ahli Gizi wajib verifikasi kata sandi resmi.
             </p>
           </div>
 
           {/* Mode Switcher Tabs */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 p-1.5 bg-slate-200/90 rounded-2xl max-w-xl mx-auto border border-slate-300">
-            <button
-              type="button"
-              onClick={() => setActiveLoginMode('QUICK_OPERATIONAL')}
-              className={`w-full sm:w-1/2 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                activeLoginMode === 'QUICK_OPERATIONAL'
-                  ? 'bg-teal-800 text-white shadow-md'
-                  : 'text-slate-700 hover:text-slate-900 hover:bg-white/60'
-              }`}
-            >
-              <UserCheck className="w-4 h-4" />
-              <span>Akses Cepat Petugas Pelaksana ({operationalUsers.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveLoginMode('MANUAL_ADMIN_NUTR')}
-              className={`w-full sm:w-1/2 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                activeLoginMode === 'MANUAL_ADMIN_NUTR'
-                  ? 'bg-indigo-900 text-white shadow-md'
-                  : 'text-slate-700 hover:text-slate-900 hover:bg-white/60'
-              }`}
-            >
-              <Lock className="w-4 h-4 text-amber-400" />
-              <span>Login Manual (Admin &amp; Ahli Gizi)</span>
-            </button>
+          <div className="flex items-center justify-center">
+            <div className="inline-flex p-1.5 bg-slate-200/80 rounded-2xl border border-slate-300 max-w-xl w-full text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setActiveLoginMode('QUICK_OPERATIONAL')}
+                className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
+                  activeLoginMode === 'QUICK_OPERATIONAL'
+                    ? 'bg-teal-800 text-white shadow-md'
+                    : 'text-slate-700 hover:text-teal-900 hover:bg-white/50'
+                }`}
+              >
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>Akses Cepat (Tanpa Password)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveLoginMode('MANUAL_ADMIN_NUTR')}
+                className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
+                  activeLoginMode === 'MANUAL_ADMIN_NUTR'
+                    ? 'bg-teal-800 text-white shadow-md'
+                    : 'text-slate-700 hover:text-teal-900 hover:bg-white/50'
+                }`}
+              >
+                <Lock className="w-4 h-4 text-teal-300" />
+                <span>Admin &amp; Ahli Gizi (Dengan Sandi)</span>
+              </button>
+            </div>
           </div>
 
-          {activeLoginMode === 'QUICK_OPERATIONAL' ? (
+          {/* TAB 1: QUICK 1-CLICK OPERATIONAL LOGIN (TANPA PASSWORD) */}
+          {activeLoginMode === 'QUICK_OPERATIONAL' && (
             <div className="space-y-6">
-              {/* Role Filter Tabs (Hanya Peran Pelaksana Operasional) */}
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedRoleFilter('ALL')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    selectedRoleFilter === 'ALL'
-                      ? 'bg-teal-800 text-white shadow-sm'
-                      : 'bg-white text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Semua Pelaksana ({operationalUsers.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedRoleFilter('DOKTER')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    selectedRoleFilter === 'DOKTER'
-                      ? 'bg-blue-700 text-white shadow-sm'
-                      : 'bg-white text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Dokter
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedRoleFilter('PERAWAT')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    selectedRoleFilter === 'PERAWAT'
-                      ? 'bg-sky-700 text-white shadow-sm'
-                      : 'bg-white text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Perawat
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedRoleFilter('PENYEDIA')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    selectedRoleFilter === 'PENYEDIA'
-                      ? 'bg-amber-700 text-white shadow-sm'
-                      : 'bg-white text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Penyedia Katering
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedRoleFilter('PJLP_PRAMUSAJI')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    selectedRoleFilter === 'PJLP_PRAMUSAJI'
-                      ? 'bg-emerald-700 text-white shadow-sm'
-                      : 'bg-white text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  PJLP / Pramusaji
-                </button>
-              </div>
-
-              {/* User Cards Grid (Admin dan Ahli Gizi TIDAK TAMPIL DI SINI) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredOperationalUsers.map((user) => {
-                  const meta = roleMeta[user.role];
-                  const IconComp = meta?.icon || Activity;
-
-                  return (
-                    <div
-                      key={user.id}
-                      className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all p-5 flex flex-col justify-between group"
-                    >
-                      <div className="space-y-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 flex items-center justify-center font-bold text-sm shrink-0">
-                              <IconComp className="w-5 h-5 text-teal-700" />
-                            </div>
-                            <div>
-                              <h3 className="font-bold text-slate-900 text-sm leading-tight group-hover:text-teal-800 transition">
-                                {user.name}
-                              </h3>
-                              <p className="text-[11px] text-slate-500 font-mono">
-                                NIP/NIK: {user.nipOrNik}
-                              </p>
-                            </div>
-                          </div>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${meta?.bgBadge}`}>
-                            {meta?.title}
-                          </span>
-                        </div>
-
-                        <div className="p-3 bg-slate-50 rounded-xl text-xs space-y-1.5 border border-slate-100">
-                          <p className="font-semibold text-slate-700 text-[11px]">
-                            Unit: <span className="font-normal text-slate-600">{user.unitOrWard}</span>
-                          </p>
-                          <p className="text-[11px] text-slate-600 leading-snug">
-                            {meta?.description}
-                          </p>
-                        </div>
-
-                        <div className="space-y-1 text-[11px] text-slate-600">
-                          <p className="font-bold text-slate-800 text-[10px] uppercase tracking-wide">
-                            Fitur Utama Peran:
-                          </p>
-                          {meta?.responsibilities.map((resp, i) => (
-                            <div key={i} className="flex items-start gap-1.5">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
-                              <span>{resp}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="pt-5 mt-4 border-t border-slate-100">
-                        <button
-                          type="button"
-                          onClick={() => onLoginAsUser(user)}
-                          className="w-full py-2.5 px-4 rounded-xl bg-teal-800 hover:bg-teal-900 active:scale-98 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all"
-                        >
-                          <span>Masuk sebagai {user.name.split(',')[0]}</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Informative Security Callout for Admin & Ahli Gizi */}
-              <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center shrink-0">
-                    <Lock className="w-5 h-5 text-amber-700" />
+              {/* Notice Banner */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-xs text-emerald-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 font-bold">
+                    ✓
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900">
-                      Mencari Akun Administrator atau Ahli Gizi?
+                    <h4 className="font-bold text-slate-900">
+                      Tinggal Login Tanpa Password untuk Petugas Operasional Bangsal &amp; Dapur
                     </h4>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Pilihan login Administrator dan Ahli Gizi disembunyikan dari akses 1-klik demi keamanan integritas database dan verifikasi gizi klinis.
+                    <p className="text-[11px] text-emerald-800 mt-0.5">
+                      Pilih nama akun petugas di bawah untuk langsung membuka modul sesuai tugas dan wewenang.
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setActiveLoginMode('MANUAL_ADMIN_NUTR')}
-                  className="px-4 py-2 rounded-xl bg-indigo-900 hover:bg-indigo-950 text-white text-xs font-bold shrink-0 flex items-center gap-2 shadow-sm transition-all"
+                  className="text-xs text-teal-800 hover:text-teal-950 font-bold underline whitespace-nowrap self-end sm:self-auto"
                 >
-                  <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Buka Form Login Manual</span>
+                  Masuk sebagai Admin / Ahli Gizi →
                 </button>
               </div>
-            </div>
-          ) : (
-            /* Dedicated Manual Login for Administrator & Ahli Gizi */
-            <div className="max-w-2xl mx-auto space-y-6">
-              <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
-                <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 text-white text-center space-y-2">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/40 text-amber-300 flex items-center justify-center mx-auto shadow-inner">
-                    <Lock className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-lg font-extrabold tracking-tight">
-                    Login Manual Khusus Admin &amp; Ahli Gizi
-                  </h3>
-                  <p className="text-xs text-indigo-200 max-w-md mx-auto">
-                    Masukkan kredensial resmi (Email / Username dan Kata Sandi) untuk mengakses menu pengaturan sistem, database GAS, verifikasi diet, dan billing gizi.
-                  </p>
-                </div>
 
-                <form onSubmit={handleManualLogin} className="p-6 sm:p-8 space-y-5">
-                  {manualError && (
-                    <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-start gap-2.5">
-                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                      <span>{manualError}</span>
-                    </div>
-                  )}
-
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-slate-800">
-                      Email atau Username Petugas
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={manualIdentifier}
-                        onChange={(e) => setManualIdentifier(e.target.value)}
-                        placeholder="Contoh: admin, ahligizi, atau email petugas"
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600 transition"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-xs font-bold text-slate-800">
-                        Kata Sandi Petugas
-                      </label>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        Kata sandi bawaan: password123
-                      </span>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={manualPassword}
-                        onChange={(e) => setManualPassword(e.target.value)}
-                        placeholder="Masukkan kata sandi..."
-                        className="w-full px-4 py-2.5 pr-10 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600 transition"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
-                        title={showPassword ? 'Sembunyikan sandi' : 'Tampilkan sandi'}
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-900 to-teal-800 hover:from-indigo-800 hover:to-teal-700 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20 transition-all hover:scale-[1.01] active:scale-[0.99]"
-                  >
-                    <KeyRound className="w-4 h-4 text-amber-400" />
-                    <span>Verifikasi Kredensial &amp; Masuk</span>
-                  </button>
-                </form>
-              </div>
-
-              <div className="text-center">
+              {/* Role Filter Pills */}
+              <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
                 <button
                   type="button"
-                  onClick={() => setActiveLoginMode('QUICK_OPERATIONAL')}
-                  className="text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center gap-1.5 transition"
+                  onClick={() => setSelectedRoleFilter('ALL')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition border ${
+                    selectedRoleFilter === 'ALL'
+                      ? 'bg-teal-800 text-white border-teal-800 shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
                 >
-                  <span>&larr; Kembali ke Pilihan Petugas Pelaksana (Dokter, Perawat, Penyedia, Pramusaji)</span>
+                  Semua Petugas ({operationalUsers.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRoleFilter('DOKTER')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition border flex items-center gap-1.5 ${
+                    selectedRoleFilter === 'DOKTER'
+                      ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
+                      : 'bg-white text-blue-800 border-blue-200 hover:bg-blue-50'
+                  }`}
+                >
+                  <Stethoscope className="w-3.5 h-3.5" />
+                  <span>Dokter DPJP</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRoleFilter('PERAWAT')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition border flex items-center gap-1.5 ${
+                    selectedRoleFilter === 'PERAWAT'
+                      ? 'bg-sky-700 text-white border-sky-700 shadow-xs'
+                      : 'bg-white text-sky-800 border-sky-200 hover:bg-sky-50'
+                  }`}
+                >
+                  <HeartPulse className="w-3.5 h-3.5" />
+                  <span>Perawat Bangsal</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRoleFilter('PJLP_PRAMUSAJI')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition border flex items-center gap-1.5 ${
+                    selectedRoleFilter === 'PJLP_PRAMUSAJI'
+                      ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                      : 'bg-white text-emerald-800 border-emerald-200 hover:bg-emerald-50'
+                  }`}
+                >
+                  <Truck className="w-3.5 h-3.5" />
+                  <span>PJLP Pramusaji</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRoleFilter('PENYEDIA')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition border flex items-center gap-1.5 ${
+                    selectedRoleFilter === 'PENYEDIA'
+                      ? 'bg-amber-700 text-white border-amber-700 shadow-xs'
+                      : 'bg-white text-amber-800 border-amber-200 hover:bg-amber-50'
+                  }`}
+                >
+                  <ChefHat className="w-3.5 h-3.5" />
+                  <span>Penyedia Katering</span>
+                </button>
+              </div>
+
+              {/* Grid of Operational Staff Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+                {filteredOperationalUsers.map((user) => {
+                  const meta = roleMeta[user.role] || roleMeta['PERAWAT'];
+                  const IconComponent = meta.icon;
+
+                  return (
+                    <div
+                      key={user.id}
+                      className="bg-white rounded-2xl border border-slate-200 hover:border-teal-400 p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4 group"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-200 text-teal-800 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                              <IconComponent className="w-6 h-6 text-teal-700" />
+                            </div>
+                            <div>
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${meta.bgBadge}`}>
+                                {meta.title}
+                              </span>
+                              <h3 className="text-sm font-extrabold text-slate-900 mt-1 leading-tight">
+                                {user.name}
+                              </h3>
+                              <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                                NIP/NIK: {user.nipOrNik || '-'}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold whitespace-nowrap">
+                            Tanpa Sandi
+                          </span>
+                        </div>
+
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-[11px] text-slate-600 space-y-1">
+                          <p className="line-clamp-2">{meta.description}</p>
+                          {user.unitOrWard && (
+                            <p className="text-[10px] text-teal-800 font-semibold">
+                              Unit/Lokasi: {user.unitOrWard}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => onLoginAsUser(user)}
+                        className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-teal-800 to-teal-700 hover:from-teal-700 hover:to-teal-600 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all group-hover:shadow hover:scale-[1.01] active:scale-[0.99]"
+                      >
+                        <UserCheck className="w-4 h-4 text-amber-300" />
+                        <span>Masuk Langsung ({meta.title})</span>
+                        <ArrowRight className="w-3.5 h-3.5 ml-auto" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* GAS Sync Quick Status */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-slate-600">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>
+                    Database Akun Real: <strong>{operationalUsers.length} Petugas Operasional Terdaftar</strong>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const res = await db.pullLiveDatabaseFromGas();
+                    alert(res.message);
+                    if (res.success) window.location.reload();
+                  }}
+                  className="text-teal-800 hover:text-teal-950 font-bold inline-flex items-center gap-1.5 transition text-[11px]"
+                  title="Tarik daftar pengguna terbaru langsung dari Google Spreadsheet"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Sinkronkan Akun dari Spreadsheet</span>
                 </button>
               </div>
             </div>
           )}
+
+          {/* TAB 2: PRIVILEGED LOGIN (ADMIN & AHLI GIZI - DENGAN PASSWORD) */}
+          {activeLoginMode === 'MANUAL_ADMIN_NUTR' && (
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden max-w-xl mx-auto animate-in fade-in-50">
+              <div className="bg-gradient-to-r from-teal-950 via-teal-900 to-slate-900 p-6 text-white text-center space-y-2">
+                <div className="w-12 h-12 rounded-2xl bg-teal-500/20 border border-teal-400/40 text-amber-300 flex items-center justify-center mx-auto shadow-inner">
+                  <Lock className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-extrabold tracking-tight">
+                  Login Khusus Admin &amp; Ahli Gizi
+                </h3>
+                <p className="text-xs text-teal-200 max-w-md mx-auto">
+                  Wajib verifikasi Email / Username / NIP dan Kata Sandi resmi demi menjaga keamanan tarif, kontrak, SPK, dan SPJ Puskesmas.
+                </p>
+              </div>
+
+              <form onSubmit={handleManualLogin} className="p-6 sm:p-8 space-y-5">
+                {manualError && (
+                  <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <span>{manualError}</span>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800">
+                    Email, Username, atau NIP Petugas (Admin / Ahli Gizi) *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={manualIdentifier}
+                      onChange={(e) => setManualIdentifier(e.target.value)}
+                      placeholder="Contoh: ahligizi atau admin.gizi@puskesmas.id..."
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-700 transition"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-800">
+                      Kata Sandi Petugas *
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      Default: password123
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={manualPassword}
+                      onChange={(e) => setManualPassword(e.target.value)}
+                      placeholder="Masukkan kata sandi akun..."
+                      className="w-full px-4 py-2.5 pr-10 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-700 transition"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                      title={showPassword ? 'Sembunyikan sandi' : 'Tampilkan sandi'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-teal-800 to-teal-700 hover:from-teal-700 hover:to-teal-600 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-teal-900/20 transition-all hover:scale-[1.01] active:scale-[0.99]"
+                >
+                  <KeyRound className="w-4 h-4 text-amber-300" />
+                  <span>Verifikasi Sandi &amp; Masuk</span>
+                </button>
+
+                <div className="text-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveLoginMode('QUICK_OPERATIONAL')}
+                    className="text-xs text-teal-800 hover:text-teal-950 font-bold underline"
+                  >
+                    ← Kembali ke Akses Cepat Dokter, Perawat, PJLP &amp; Penyedia (Tanpa Sandi)
+                  </button>
+                </div>
+              </form>
+
+              {/* Database & Sync Status Footer */}
+              <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-slate-600">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>
+                    Database: <strong>{allUsers.length} Petugas Terdaftar</strong>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const res = await db.pullLiveDatabaseFromGas();
+                    alert(res.message);
+                    if (res.success) window.location.reload();
+                  }}
+                  className="text-teal-800 hover:text-teal-950 font-semibold inline-flex items-center gap-1.5 transition text-[11px]"
+                  title="Tarik daftar pengguna terbaru langsung dari Google Spreadsheet"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Sinkronkan Akun dari GAS</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Supported Roles Badges */}
+          <div className="text-center pt-2">
+            <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider mb-3">
+              Peran Petugas yang Didukung Sistem:
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <span className="px-3 py-1 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                Dokter DPJP
+              </span>
+              <span className="px-3 py-1 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                Perawat Bangsal
+              </span>
+              <span className="px-3 py-1 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                Ahli Gizi (Nutrisionis)
+              </span>
+              <span className="px-3 py-1 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                Penyedia Makanan (Katering)
+              </span>
+              <span className="px-3 py-1 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                PJLP Pramusaji Bangsal
+              </span>
+              <span className="px-3 py-1 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                Administrator Sistem
+              </span>
+            </div>
+          </div>
         </div>
       </section>
 
